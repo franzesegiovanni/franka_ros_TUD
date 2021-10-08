@@ -1,4 +1,5 @@
-# ROS integration for Franka Emika research robots
+# ROS integration for Franka Emika research robot
+# Impedance Controller CoR Lab TU Delft
 
 [![Build Status][travis-status]][travis]
 
