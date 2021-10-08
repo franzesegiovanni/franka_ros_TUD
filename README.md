@@ -31,7 +31,7 @@ https://frankaemika.github.io/docs/installation_linux.html#building-the-ros-pack
 roslaunch franka_example_controllers cartesian_impedance_example_controller.launch robot_ip:=172.16.0.2 load_gripper:=True
 
 ## How to run a publisher for reading the current robot position and orientation without the need of special message types. 
-roslaunch franka_example_controllers cartesian_impedance_example_controller.launch robot_ip:=172.16.0.2 load_gripper:=True
+rosrun franka_example_controllers read_position
 
 ## How to control the gripper
 rosrun franka_gripper franka_gripper_GF
