@@ -1,0 +1,2 @@
+- setup-file:
+    local-name: /home/userpanda/panda_folder/panda_catkin_ws/src/franka_ros/franka_gripper/devel/setup.sh

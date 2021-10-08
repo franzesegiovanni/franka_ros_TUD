@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python
 
 import rospy
 import tf.transformations
@@ -36,7 +36,7 @@ def franka_state_callback(msg):
     marker_pose.pose.orientation.w = initial_quaternion[3]
     marker_pose.pose.position.x = msg.O_T_EE[12]
     marker_pose.pose.position.y = msg.O_T_EE[13]
-    marker_pose.pose.position.z = msg.O_T_EE[14]
+    marker_pose.pose.position.z = msg.O_T_EE[14]+0.1
     global initial_pose_found
     initial_pose_found = True
 
@@ -81,8 +81,8 @@ if __name__ == "__main__":
                               "so be aware of potential collisions")
     int_marker.pose = marker_pose.pose
     # run pose publisher
-    rospy.Timer(rospy.Duration(0.005),
-                lambda msg: publisherCallback(msg, link_name))
+    #rospy.Timer(rospy.Duration(01.005), # this has been changed!! GF
+                #lambda msg: publisherCallback(msg, link_name))
 
     # insert a box
     control = InteractiveMarkerControl()
@@ -134,8 +134,9 @@ if __name__ == "__main__":
     control.name = "move_z"
     control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
     int_marker.controls.append(control)
-    server.insert(int_marker, processFeedback)
+   # We removed the possibility to recieve informations from the
+    #server.insert(int_marker, processFeedback)
 
-    server.applyChanges()
+    #server.applyChanges()
 
     rospy.spin()

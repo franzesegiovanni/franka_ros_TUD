@@ -1,0 +1,43 @@
+#!/usr/bin/env python
+
+import rospy
+import actionlib
+from franka_gripper.msg import GraspAction, GraspActionGoal, GraspGoal
+from franka_gripper.msg import MoveAction, MoveActionGoal, MoveGoal
+from franka_gripper.msg import HomingAction, HomingActionGoal, HomingGoal
+from std_msgs.msg import Float64
+
+def moveGripper():
+    graspClient = actionlib.SimpleActionClient("franka_gripper/grasp", GraspAction)
+    moveClient = actionlib.SimpleActionClient("franka_gripper/move", MoveAction)
+    homeClient = actionlib.SimpleActionClient("franka_gripper/homing", HomingAction)
+    print("Wating for server")
+    moveClient.wait_for_server()
+    graspClient.wait_for_server()
+    homeClient.wait_for_server()
+    print("Found for server")
+    moveActionGoal = MoveGoal()
+    moveActionGoal.width = 0.075
+    moveActionGoal.speed = 0.02
+    graspActionGoal = GraspGoal()
+    graspActionGoal.width = 0.07
+    graspActionGoal.epsilon.inner = 0.001
+    graspActionGoal.epsilon.outer = 0.001
+    graspActionGoal.speed = 0.05
+    graspActionGoal.force = 1.85
+    homeActionGoal = HomingGoal()
+    #homeClient.send_goal(homeActionGoal)
+    #moveClient.send_goal(moveActionGoal)
+    #moveClient.wait_for_result()
+    graspClient.send_goal(graspActionGoal)
+    graspClient.wait_for_result()
+    #homeClient.send_goal(homeActionGoal)
+
+if __name__ == '__main__':
+    rospy.init_node('gripperClient', anonymous=True)
+    rate = rospy.Rate(10) # 10hz
+    try:
+        moveGripper()
+    	except rospy.ROSInterruptException:
+        pass
+

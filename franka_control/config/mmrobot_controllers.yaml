@@ -1,0 +1,39 @@
+position_joint_trajectory_controller:
+  type: position_controllers/JointTrajectoryController
+  joints:
+    - mmrobot_joint1
+    - mmrobot_joint2
+    - mmrobot_joint3
+    - mmrobot_joint4
+    - mmrobot_joint5
+    - mmrobot_joint6
+    - mmrobot_joint7
+  constraints:
+    goal_time: 0.5
+    mmrobot_joint1:
+      goal: 0.05
+    mmrobot_joint2:
+      goal: 0.05
+    mmrobot_joint3:
+      goal: 0.05
+    mmrobot_joint4:
+      goal: 0.05
+    mmrobot_joint5:
+      goal: 0.05
+    mmrobot_joint6:
+      goal: 0.05
+    mmrobot_joint7:
+      goal: 0.05
+
+franka_state_controller:
+  type: franka_control/FrankaStateController
+  publish_rate: 30  # [Hz]
+  joint_names:
+    - mmrobot_joint1
+    - mmrobot_joint2
+    - mmrobot_joint3
+    - mmrobot_joint4
+    - mmrobot_joint5
+    - mmrobot_joint6
+    - mmrobot_joint7
+  arm_id: panda

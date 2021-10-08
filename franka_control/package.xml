@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>franka_control</name>
-  <version>0.8.1</version>
+  <version>0.6.0</version>
   <description>franka_control provides a hardware node to control a Franka Emika research robot</description>
   <maintainer email="support@franka.de">Franka Emika GmbH</maintainer>
   <license>Apache 2.0</license>
@@ -13,7 +13,11 @@
 
   <buildtool_depend>catkin</buildtool_depend>
 
+  <build_depend>message_generation</build_depend>
+
   <depend>libfranka</depend>
+  <depend>actionlib</depend>
+  <depend>actionlib_msgs</depend>
   <depend>controller_interface</depend>
   <depend>controller_manager</depend>
   <depend>franka_hw</depend>
@@ -25,12 +29,14 @@
   <depend>sensor_msgs</depend>
   <depend>tf2_msgs</depend>
   <depend>tf</depend>
-  <depend>std_srvs</depend>
 
   <exec_depend>franka_description</exec_depend>
   <exec_depend>franka_gripper</exec_depend>
   <exec_depend>joint_state_publisher</exec_depend>
+  <exec_depend>message_runtime</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
+
+  <build_export_depend>message_runtime</build_export_depend>
 
   <export>
     <controller_interface plugin="${prefix}/franka_controller_plugins.xml"/>

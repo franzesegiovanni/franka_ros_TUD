@@ -7,8 +7,6 @@
 
 #include <franka/model.h>
 #include <franka/robot_state.h>
-#include <franka_hw/model.h>
-#include <franka_hw/model_base.h>
 #include <hardware_interface/internal/hardware_resource_manager.h>
 
 namespace franka_hw {
@@ -22,14 +20,12 @@ class FrankaModelHandle {
 
   /**
    * Creates an instance of a FrankaModelHandle.
+   *
    * @param[in] name The name of the model handle.
-   * @param[in] model A reference to an implementation of the abstract franka_hw::ModelBase
-   * class wrapped by this handle
+   * @param[in] model A reference to the franka::Model instance wrapped by this handle.
    * @param[in] robot_state A reference to the current robot state.
    */
-  FrankaModelHandle(const std::string& name,
-                    franka_hw::ModelBase& model,
-                    franka::RobotState& robot_state)
+  FrankaModelHandle(const std::string& name, franka::Model& model, franka::RobotState& robot_state)
       : name_(name), model_(&model), robot_state_(&robot_state) {}
 
   /**
@@ -225,7 +221,7 @@ class FrankaModelHandle {
       const std::array<double, 16>& F_T_EE,  // NOLINT (readability-identifier-naming)
       const std::array<double, 16>& EE_T_K)  // NOLINT (readability-identifier-naming)
       const {
-    return model_->bodyJacobian(frame, q, F_T_EE, EE_T_K);
+    return model_->bodyJacobian(frame, *robot_state_);
   }
 
   /**
@@ -265,12 +261,12 @@ class FrankaModelHandle {
       const std::array<double, 16>& F_T_EE,  // NOLINT (readability-identifier-naming)
       const std::array<double, 16>& EE_T_K)  // NOLINT (readability-identifier-naming)
       const {
-    return model_->zeroJacobian(frame, q, F_T_EE, EE_T_K);
+    return model_->zeroJacobian(frame, *robot_state_);
   }
 
  private:
   std::string name_;
-  const franka_hw::ModelBase* model_;
+  const franka::Model* model_;
   const franka::RobotState* robot_state_;
 };
 
