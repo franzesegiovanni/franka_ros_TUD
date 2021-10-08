@@ -22,16 +22,16 @@ For more informations or info please send an email to the mail to g.franzese@tud
 
 The author of the repository wil not take any responsability in case of wrong behaviour of the repository. Please refer to the original one in case you were not directly asked to use this repository.
 
-# How to install the controller
+## How to install the controller
 https://frankaemika.github.io/docs/installation_linux.html#building-the-ros-packages 
 1. Be sure to have libfranka installed 
 2. clone this folder in the scr foulder and not the orginal one. 
 
-# How to start the impedance controller 
+## How to start the impedance controller 
 roslaunch franka_example_controllers cartesian_impedance_example_controller.launch robot_ip:=172.16.0.2 load_gripper:=True
 
-# How to run a publisher for reading the current robot position and orientation without the need of special message types. 
+## How to run a publisher for reading the current robot position and orientation without the need of special message types. 
 roslaunch franka_example_controllers cartesian_impedance_example_controller.launch robot_ip:=172.16.0.2 load_gripper:=True
 
-# How to control the gripper
+## How to control the gripper
 rosrun franka_gripper franka_gripper_GF
