@@ -20,7 +20,7 @@ This impedance control allows to control the stiffness with a node in real time 
 
 For more informations or info please send an email to the mail to g.franzese@tudelft.nl
 
-The author of the repository wil not take any responsability in case of wrong behaviour of the repository. Please refer to the original one in case you were not directly asked to use this repository.
+The author of the repository wil not take any responsability in case of undesired behaviour of the repository. Please refer to the original one in case you were not directly asked to use this repository.
 
 ## How to install the controller
 https://frankaemika.github.io/docs/installation_linux.html#building-the-ros-packages 
