@@ -34,4 +34,4 @@ roslaunch franka_example_controllers cartesian_impedance_example_controller.laun
 rosrun franka_example_controllers read_position
 
 ## How to control the gripper
-rosrun franka_gripper franka_gripper_GF
+rosrun franka_gripper franka_gripper_online
