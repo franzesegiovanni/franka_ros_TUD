@@ -236,11 +236,11 @@ Eigen::Matrix<double, 7, 1> CartesianImpedanceExampleController::saturateTorqueR
 }
 
 void CartesianImpedanceExampleController::equilibriumStiffnessCallback(
-    const std_msgs::Float32MultiArray::ConstPtr& stiffness_xyz){
+    const std_msgs::Float32MultiArray::ConstPtr& stiffness_){
 
   int i = 0;
   // print all the remaining numbers
-  for(std::vector<float>::const_iterator it = stiffness_xyz->data.begin(); it != stiffness_xyz->data.end(); ++it)
+  for(std::vector<float>::const_iterator it = stiffness_->data.begin(); it != stiffness_->data.end(); ++it)
   {
     stiff_[i] = *it;
     i++;
