@@ -7,6 +7,7 @@
 #include <array>
 #include <cstring>
 #include <iterator>
+#include <memory>
 
 #include <controller_interface/controller_base.h>
 #include <hardware_interface/hardware_interface.h>
@@ -48,8 +49,8 @@ bool ModelExampleController::init(hardware_interface::RobotHW* robot_hw,
   }
 
   try {
-    franka_state_handle_.reset(
-        new franka_hw::FrankaStateHandle(franka_state_interface_->getHandle(arm_id + "_robot")));
+    franka_state_handle_ = std::make_unique<franka_hw::FrankaStateHandle>(
+        franka_state_interface_->getHandle(arm_id + "_robot"));
   } catch (const hardware_interface::HardwareInterfaceException& ex) {
     ROS_ERROR_STREAM(
         "ModelExampleController: Exception getting franka state handle: " << ex.what());
@@ -57,8 +58,8 @@ bool ModelExampleController::init(hardware_interface::RobotHW* robot_hw,
   }
 
   try {
-    model_handle_.reset(
-        new franka_hw::FrankaModelHandle(model_interface_->getHandle(arm_id + "_model")));
+    model_handle_ = std::make_unique<franka_hw::FrankaModelHandle>(
+        model_interface_->getHandle(arm_id + "_model"));
   } catch (hardware_interface::HardwareInterfaceException& ex) {
     ROS_ERROR_STREAM(
         "ModelExampleController: Exception getting model handle from interface: " << ex.what());
@@ -69,7 +70,6 @@ bool ModelExampleController::init(hardware_interface::RobotHW* robot_hw,
 
 void ModelExampleController::update(const ros::Time& /*time*/, const ros::Duration& /*period*/) {
   if (rate_trigger_()) {
-    franka::RobotState robot_state = franka_state_handle_->getRobotState();
     std::array<double, 49> mass = model_handle_->getMass();
     std::array<double, 7> coriolis = model_handle_->getCoriolis();
     std::array<double, 7> gravity = model_handle_->getGravity();

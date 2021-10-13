@@ -196,20 +196,20 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
                        (nullspace_stiffness_ * null_vect -
                         1*(2.0 * sqrt(nullspace_stiffness_)) * dq); //double critic damping
   tau_joint_limit.setZero();                      
-  if (q(0)>2.85)     { tau_joint_limit(0)=-2; } 
-  if (q(0)<-2.85)    { tau_joint_limit(0)=+2; }
-  if (q(1)>1.7)      { tau_joint_limit(1)=-2; }
-  if (q(1)<-1.7)     { tau_joint_limit(1)=+2; }
-  if (q(2)>2.85)     { tau_joint_limit(2)=-2; }
-  if (q(2)<-2.85)    { tau_joint_limit(2)=+2; }
-  if (q(3)>-0.1)     { tau_joint_limit(3)=-2; }
-  if (q(3)<-3.0)     { tau_joint_limit(3)=+2; }
-  if (q(4)>2.85)     { tau_joint_limit(4)=-2; }
-  if (q(4)<-2.85)    { tau_joint_limit(4)=+2; }
-  if (q(5)>3.7)      { tau_joint_limit(5)=-2; }  
-  if (q(5)<-0.1)     { tau_joint_limit(5)=+2; }
-  if (q(6)>2.8)      { tau_joint_limit(6)=-2; }
-  if (q(6)<-2.8)     { tau_joint_limit(6)=+2; }
+  if (q(0)>2.85)     { tau_joint_limit(0)=-10; } 
+  if (q(0)<-2.85)    { tau_joint_limit(0)=+10; }
+  if (q(1)>1.7)      { tau_joint_limit(1)=-10; }
+  if (q(1)<-1.7)     { tau_joint_limit(1)=+10; }
+  if (q(2)>2.85)     { tau_joint_limit(2)=-10; }
+  if (q(2)<-2.85)    { tau_joint_limit(2)=+10; }
+  if (q(3)>-0.1)     { tau_joint_limit(3)=-10; }
+  if (q(3)<-3.0)     { tau_joint_limit(3)=+10; }
+  if (q(4)>2.85)     { tau_joint_limit(4)=-10; }
+  if (q(4)<-2.85)    { tau_joint_limit(4)=+10; }
+  if (q(5)>3.7)      { tau_joint_limit(5)=-10; }  
+  if (q(5)<-0.1)     { tau_joint_limit(5)=+10; }
+  if (q(6)>2.8)      { tau_joint_limit(6)=-10; }
+  if (q(6)<-2.8)     { tau_joint_limit(6)=+10; }
   // Desired torque
   tau_d << tau_task + tau_nullspace + coriolis+ tau_joint_limit;
   // Saturate torque rate to avoid discontinuities

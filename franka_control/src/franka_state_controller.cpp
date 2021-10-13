@@ -177,7 +177,7 @@ bool FrankaStateController::init(hardware_interface::RobotHW* robot_hardware,
   publisher_external_wrench_.init(controller_node_handle, "F_ext", 1);
 
   {
-    std::lock_guard<realtime_tools::RealtimePublisher<sensor_msgs::JointState> > lock(
+    std::lock_guard<realtime_tools::RealtimePublisher<sensor_msgs::JointState>> lock(
         publisher_joint_states_);
     publisher_joint_states_.msg_.name.resize(joint_names_.size());
     publisher_joint_states_.msg_.position.resize(robot_state_.q.size());
@@ -185,7 +185,7 @@ bool FrankaStateController::init(hardware_interface::RobotHW* robot_hardware,
     publisher_joint_states_.msg_.effort.resize(robot_state_.tau_J.size());
   }
   {
-    std::lock_guard<realtime_tools::RealtimePublisher<sensor_msgs::JointState> > lock(
+    std::lock_guard<realtime_tools::RealtimePublisher<sensor_msgs::JointState>> lock(
         publisher_joint_states_desired_);
     publisher_joint_states_desired_.msg_.name.resize(joint_names_.size());
     publisher_joint_states_desired_.msg_.position.resize(robot_state_.q_d.size());
@@ -193,26 +193,32 @@ bool FrankaStateController::init(hardware_interface::RobotHW* robot_hardware,
     publisher_joint_states_desired_.msg_.effort.resize(robot_state_.tau_J_d.size());
   }
   {
-    std::lock_guard<realtime_tools::RealtimePublisher<tf2_msgs::TFMessage> > lock(
+    std::lock_guard<realtime_tools::RealtimePublisher<tf2_msgs::TFMessage>> lock(
         publisher_transforms_);
-    publisher_transforms_.msg_.transforms.resize(2);
+    publisher_transforms_.msg_.transforms.resize(3);
     tf::Quaternion quaternion(0.0, 0.0, 0.0, 1.0);
     tf::Vector3 translation(0.0, 0.0, 0.05);
     tf::Transform transform(quaternion, translation);
     tf::StampedTransform stamped_transform(transform, ros::Time::now(), arm_id_ + "_link8",
-                                           arm_id_ + "_EE");
+                                           arm_id_ + "_NE");
     geometry_msgs::TransformStamped transform_message;
     transformStampedTFToMsg(stamped_transform, transform_message);
     publisher_transforms_.msg_.transforms[0] = transform_message;
+
     translation = tf::Vector3(0.0, 0.0, 0.0);
     transform = tf::Transform(quaternion, translation);
     stamped_transform =
-        tf::StampedTransform(transform, ros::Time::now(), arm_id_ + "_EE", arm_id_ + "_K");
+        tf::StampedTransform(transform, ros::Time::now(), arm_id_ + "_NE", arm_id_ + "_EE");
     transformStampedTFToMsg(stamped_transform, transform_message);
     publisher_transforms_.msg_.transforms[1] = transform_message;
+
+    stamped_transform =
+        tf::StampedTransform(transform, ros::Time::now(), arm_id_ + "_EE", arm_id_ + "_K");
+    transformStampedTFToMsg(stamped_transform, transform_message);
+    publisher_transforms_.msg_.transforms[2] = transform_message;
   }
   {
-    std::lock_guard<realtime_tools::RealtimePublisher<geometry_msgs::WrenchStamped> > lock(
+    std::lock_guard<realtime_tools::RealtimePublisher<geometry_msgs::WrenchStamped>> lock(
         publisher_external_wrench_);
     publisher_external_wrench_.msg_.header.frame_id = arm_id_ + "_K";
     publisher_external_wrench_.msg_.wrench.force.x = 0.0;
@@ -245,11 +251,20 @@ void FrankaStateController::publishFrankaStates(const ros::Time& time) {
                   "Robot state Cartesian members do not have same size");
     static_assert(sizeof(robot_state_.cartesian_collision) == sizeof(robot_state_.O_F_ext_hat_K),
                   "Robot state Cartesian members do not have same size");
+    static_assert(sizeof(robot_state_.cartesian_collision) == sizeof(robot_state_.O_dP_EE_d),
+                  "Robot state Cartesian members do not have same size");
+    static_assert(sizeof(robot_state_.cartesian_collision) == sizeof(robot_state_.O_dP_EE_c),
+                  "Robot state Cartesian members do not have same size");
+    static_assert(sizeof(robot_state_.cartesian_collision) == sizeof(robot_state_.O_ddP_EE_c),
+                  "Robot state Cartesian members do not have same size");
     for (size_t i = 0; i < robot_state_.cartesian_collision.size(); i++) {
       publisher_franka_states_.msg_.cartesian_collision[i] = robot_state_.cartesian_collision[i];
       publisher_franka_states_.msg_.cartesian_contact[i] = robot_state_.cartesian_contact[i];
       publisher_franka_states_.msg_.K_F_ext_hat_K[i] = robot_state_.K_F_ext_hat_K[i];
       publisher_franka_states_.msg_.O_F_ext_hat_K[i] = robot_state_.O_F_ext_hat_K[i];
+      publisher_franka_states_.msg_.O_dP_EE_d[i] = robot_state_.O_dP_EE_d[i];
+      publisher_franka_states_.msg_.O_dP_EE_c[i] = robot_state_.O_dP_EE_c[i];
+      publisher_franka_states_.msg_.O_ddP_EE_c[i] = robot_state_.O_ddP_EE_c[i];
     }
 
     static_assert(sizeof(robot_state_.q) == sizeof(robot_state_.q_d),
@@ -257,6 +272,8 @@ void FrankaStateController::publishFrankaStates(const ros::Time& time) {
     static_assert(sizeof(robot_state_.q) == sizeof(robot_state_.dq),
                   "Robot state joint members do not have same size");
     static_assert(sizeof(robot_state_.q) == sizeof(robot_state_.dq_d),
+                  "Robot state joint members do not have same size");
+    static_assert(sizeof(robot_state_.q) == sizeof(robot_state_.ddq_d),
                   "Robot state joint members do not have same size");
     static_assert(sizeof(robot_state_.q) == sizeof(robot_state_.tau_J),
                   "Robot state joint members do not have same size");
@@ -279,6 +296,7 @@ void FrankaStateController::publishFrankaStates(const ros::Time& time) {
       publisher_franka_states_.msg_.q_d[i] = robot_state_.q_d[i];
       publisher_franka_states_.msg_.dq[i] = robot_state_.dq[i];
       publisher_franka_states_.msg_.dq_d[i] = robot_state_.dq_d[i];
+      publisher_franka_states_.msg_.ddq_d[i] = robot_state_.ddq_d[i];
       publisher_franka_states_.msg_.tau_J[i] = robot_state_.tau_J[i];
       publisher_franka_states_.msg_.dtau_J[i] = robot_state_.dtau_J[i];
       publisher_franka_states_.msg_.tau_J_d[i] = robot_state_.tau_J_d[i];
@@ -289,25 +307,43 @@ void FrankaStateController::publishFrankaStates(const ros::Time& time) {
       publisher_franka_states_.msg_.tau_ext_hat_filtered[i] = robot_state_.tau_ext_hat_filtered[i];
     }
 
+    static_assert(sizeof(robot_state_.elbow) == sizeof(robot_state_.elbow_d),
+                  "Robot state elbow configuration members do not have same size");
+    static_assert(sizeof(robot_state_.elbow) == sizeof(robot_state_.elbow_c),
+                  "Robot state elbow configuration members do not have same size");
+    static_assert(sizeof(robot_state_.elbow) == sizeof(robot_state_.delbow_c),
+                  "Robot state elbow configuration members do not have same size");
+    static_assert(sizeof(robot_state_.elbow) == sizeof(robot_state_.ddelbow_c),
+                  "Robot state elbow configuration members do not have same size");
+
     for (size_t i = 0; i < robot_state_.elbow.size(); i++) {
       publisher_franka_states_.msg_.elbow[i] = robot_state_.elbow[i];
-    }
-
-    for (size_t i = 0; i < robot_state_.elbow_d.size(); i++) {
       publisher_franka_states_.msg_.elbow_d[i] = robot_state_.elbow_d[i];
+      publisher_franka_states_.msg_.elbow_c[i] = robot_state_.elbow_c[i];
+      publisher_franka_states_.msg_.delbow_c[i] = robot_state_.delbow_c[i];
+      publisher_franka_states_.msg_.ddelbow_c[i] = robot_state_.ddelbow_c[i];
     }
 
     static_assert(sizeof(robot_state_.O_T_EE) == sizeof(robot_state_.F_T_EE),
+                  "Robot state transforms do not have same size");
+    static_assert(sizeof(robot_state_.O_T_EE) == sizeof(robot_state_.F_T_NE),
+                  "Robot state transforms do not have same size");
+    static_assert(sizeof(robot_state_.O_T_EE) == sizeof(robot_state_.NE_T_EE),
                   "Robot state transforms do not have same size");
     static_assert(sizeof(robot_state_.O_T_EE) == sizeof(robot_state_.EE_T_K),
                   "Robot state transforms do not have same size");
     static_assert(sizeof(robot_state_.O_T_EE) == sizeof(robot_state_.O_T_EE_d),
                   "Robot state transforms do not have same size");
+    static_assert(sizeof(robot_state_.O_T_EE) == sizeof(robot_state_.O_T_EE_c),
+                  "Robot state transforms do not have same size");
     for (size_t i = 0; i < robot_state_.O_T_EE.size(); i++) {
       publisher_franka_states_.msg_.O_T_EE[i] = robot_state_.O_T_EE[i];
       publisher_franka_states_.msg_.F_T_EE[i] = robot_state_.F_T_EE[i];
+      publisher_franka_states_.msg_.F_T_NE[i] = robot_state_.F_T_NE[i];
+      publisher_franka_states_.msg_.NE_T_EE[i] = robot_state_.NE_T_EE[i];
       publisher_franka_states_.msg_.EE_T_K[i] = robot_state_.EE_T_K[i];
       publisher_franka_states_.msg_.O_T_EE_d[i] = robot_state_.O_T_EE_d[i];
+      publisher_franka_states_.msg_.O_T_EE_c[i] = robot_state_.O_T_EE_c[i];
     }
     publisher_franka_states_.msg_.m_ee = robot_state_.m_ee;
     publisher_franka_states_.msg_.m_load = robot_state_.m_load;
@@ -326,9 +362,43 @@ void FrankaStateController::publishFrankaStates(const ros::Time& time) {
     }
 
     publisher_franka_states_.msg_.time = robot_state_.time.toSec();
+    publisher_franka_states_.msg_.control_command_success_rate =
+        robot_state_.control_command_success_rate;
     publisher_franka_states_.msg_.current_errors = errorsToMessage(robot_state_.current_errors);
     publisher_franka_states_.msg_.last_motion_errors =
         errorsToMessage(robot_state_.last_motion_errors);
+
+    switch (robot_state_.robot_mode) {
+      case franka::RobotMode::kOther:
+        publisher_franka_states_.msg_.robot_mode = franka_msgs::FrankaState::ROBOT_MODE_OTHER;
+        break;
+
+      case franka::RobotMode::kIdle:
+        publisher_franka_states_.msg_.robot_mode = franka_msgs::FrankaState::ROBOT_MODE_IDLE;
+        break;
+
+      case franka::RobotMode::kMove:
+        publisher_franka_states_.msg_.robot_mode = franka_msgs::FrankaState::ROBOT_MODE_MOVE;
+        break;
+
+      case franka::RobotMode::kGuiding:
+        publisher_franka_states_.msg_.robot_mode = franka_msgs::FrankaState::ROBOT_MODE_GUIDING;
+        break;
+
+      case franka::RobotMode::kReflex:
+        publisher_franka_states_.msg_.robot_mode = franka_msgs::FrankaState::ROBOT_MODE_REFLEX;
+        break;
+
+      case franka::RobotMode::kUserStopped:
+        publisher_franka_states_.msg_.robot_mode =
+            franka_msgs::FrankaState::ROBOT_MODE_USER_STOPPED;
+        break;
+
+      case franka::RobotMode::kAutomaticErrorRecovery:
+        publisher_franka_states_.msg_.robot_mode =
+            franka_msgs::FrankaState::ROBOT_MODE_AUTOMATIC_ERROR_RECOVERY;
+        break;
+    }
 
     publisher_franka_states_.msg_.header.seq = sequence_number_;
     publisher_franka_states_.msg_.header.stamp = time;
@@ -371,15 +441,21 @@ void FrankaStateController::publishJointStates(const ros::Time& time) {
 
 void FrankaStateController::publishTransforms(const ros::Time& time) {
   if (publisher_transforms_.trylock()) {
-    tf::StampedTransform stamped_transform(convertArrayToTf(robot_state_.F_T_EE), time,
-                                           arm_id_ + "_link8", arm_id_ + "_EE");
+    tf::StampedTransform stamped_transform(convertArrayToTf(robot_state_.F_T_NE), time,
+                                           arm_id_ + "_link8", arm_id_ + "_NE");
     geometry_msgs::TransformStamped transform_message;
     transformStampedTFToMsg(stamped_transform, transform_message);
     publisher_transforms_.msg_.transforms[0] = transform_message;
+
+    stamped_transform = tf::StampedTransform(convertArrayToTf(robot_state_.NE_T_EE), time,
+                                             arm_id_ + "_NE", arm_id_ + "_EE");
+    transformStampedTFToMsg(stamped_transform, transform_message);
+    publisher_transforms_.msg_.transforms[1] = transform_message;
+
     stamped_transform = tf::StampedTransform(convertArrayToTf(robot_state_.EE_T_K), time,
                                              arm_id_ + "_EE", arm_id_ + "_K");
     transformStampedTFToMsg(stamped_transform, transform_message);
-    publisher_transforms_.msg_.transforms[1] = transform_message;
+    publisher_transforms_.msg_.transforms[2] = transform_message;
     publisher_transforms_.unlockAndPublish();
   }
 }
