@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 2.8.3)
 project(franka_gripper)
 
 set(CMAKE_CXX_STANDARD 14)
@@ -14,7 +14,8 @@ find_package(catkin REQUIRED COMPONENTS
   actionlib_msgs
 )
 
-find_package(Franka 0.7.0 REQUIRED)
+#find_package(Franka 0.4.0 REQUIRED)
+find_package(Franka 0.7.1 REQUIRED)
 
 add_action_files(
   DIRECTORY action
@@ -81,6 +82,23 @@ target_link_libraries(franka_gripper_node
    ${catkin_LIBRARIES}
    franka_gripper
 )
+
+
+add_executable(franka_gripper_online
+  src/franka_gripper_online.cpp
+)
+
+add_dependencies(franka_gripper_online
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+  franka_gripper
+)
+
+target_link_libraries(franka_gripper_online
+   ${catkin_LIBRARIES}
+   franka_gripper
+)
+
 
 target_include_directories(franka_gripper_node SYSTEM PUBLIC
   ${catkin_INCLUDE_DIRS}

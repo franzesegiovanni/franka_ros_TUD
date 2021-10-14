@@ -12,7 +12,10 @@
 
 double width =0;
 double flag =0;
-
+/**
+ * This tutorial demonstrates simple receipt of messages over the ROS system.
+ */
+// %Tag(CALLBACK)%
 void chatterCallback(const std_msgs::Float32::ConstPtr& msg)
 {
   width=msg->data;
@@ -28,13 +31,15 @@ int main(int argc, char **argv)
 
 
   ros::NodeHandle n;
-  ros::Rate loop_rate(30);
+  ros::Rate loop_rate(10);
 
   ros::Subscriber sub = n.subscribe("gripperMAT", 1000, chatterCallback);
   ros::Publisher pub = n.advertise<franka_gripper::MoveActionGoal>("/franka_gripper/move/goal", 1000);
 
   franka_gripper::MoveActionGoal msg;
+  //msg.goal.width = 0.1;
   msg.goal.speed = 1;
+  //msg.goal.force = 10.0;
 
   while (ros::ok())
   {

@@ -37,24 +37,24 @@ void handleErrors(actionlib::SimpleActionServer<T_action>* server,
 
 using actionlib::SimpleActionServer;
 using control_msgs::GripperCommandAction;
-using franka_gripper::grasp;
 using franka_gripper::GraspAction;
 using franka_gripper::GraspEpsilon;
 using franka_gripper::GraspGoalConstPtr;
 using franka_gripper::GraspResult;
-using franka_gripper::gripperCommandExecuteCallback;
-using franka_gripper::homing;
 using franka_gripper::HomingAction;
 using franka_gripper::HomingGoalConstPtr;
 using franka_gripper::HomingResult;
-using franka_gripper::move;
 using franka_gripper::MoveAction;
 using franka_gripper::MoveGoalConstPtr;
 using franka_gripper::MoveResult;
-using franka_gripper::stop;
 using franka_gripper::StopAction;
 using franka_gripper::StopGoalConstPtr;
 using franka_gripper::StopResult;
+using franka_gripper::grasp;
+using franka_gripper::gripperCommandExecuteCallback;
+using franka_gripper::homing;
+using franka_gripper::move;
+using franka_gripper::stop;
 using franka_gripper::updateGripperState;
 
 int main(int argc, char** argv) {
@@ -84,56 +84,46 @@ int main(int argc, char** argv) {
 
   franka::Gripper gripper(robot_ip);
 
-  auto homing_handler = [&gripper](auto&& goal) { return homing(gripper, goal); };
-  auto stop_handler = [&gripper](auto&& goal) { return stop(gripper, goal); };
-  auto grasp_handler = [&gripper](auto&& goal) { return grasp(gripper, goal); };
-  auto move_handler = [&gripper](auto&& goal) { return move(gripper, goal); };
+  std::function<bool(const HomingGoalConstPtr&)> homing_handler =
+      std::bind(homing, std::cref(gripper), std::placeholders::_1);
+  std::function<bool(const StopGoalConstPtr&)> stop_handler =
+      std::bind(stop, std::cref(gripper), std::placeholders::_1);
+  std::function<bool(const GraspGoalConstPtr&)> grasp_handler =
+      std::bind(grasp, std::cref(gripper), std::placeholders::_1);
+  std::function<bool(const MoveGoalConstPtr&)> move_handler =
+      std::bind(move, std::cref(gripper), std::placeholders::_1);
 
-  SimpleActionServer<HomingAction> homing_action_server(
+  SimpleActionServer<HomingAction> homing_action_server_(
       node_handle, "homing",
-      [=, &homing_action_server](auto&& goal) {
-        return handleErrors<franka_gripper::HomingAction, franka_gripper::HomingGoalConstPtr,
-                            franka_gripper::HomingResult>(&homing_action_server, homing_handler,
-                                                          goal);
-      },
+      std::bind(handleErrors<HomingAction, HomingGoalConstPtr, HomingResult>,
+                &homing_action_server_, homing_handler, std::placeholders::_1),
       false);
 
-  SimpleActionServer<StopAction> stop_action_server(
-      node_handle, "stop",
-      [=, &stop_action_server](auto&& goal) {
-        return handleErrors<franka_gripper::StopAction, franka_gripper::StopGoalConstPtr,
-                            franka_gripper::StopResult>(&stop_action_server, stop_handler, goal);
-      },
+  SimpleActionServer<StopAction> stop_action_server_(
+      node_handle, "stop", std::bind(handleErrors<StopAction, StopGoalConstPtr, StopResult>,
+                                     &stop_action_server_, stop_handler, std::placeholders::_1),
       false);
 
-  SimpleActionServer<MoveAction> move_action_server(
-      node_handle, "move",
-      [=, &move_action_server](auto&& goal) {
-        return handleErrors<franka_gripper::MoveAction, franka_gripper::MoveGoalConstPtr,
-                            franka_gripper::MoveResult>(&move_action_server, move_handler, goal);
-      },
+  SimpleActionServer<MoveAction> move_action_server_(
+      node_handle, "move", std::bind(handleErrors<MoveAction, MoveGoalConstPtr, MoveResult>,
+                                     &move_action_server_, move_handler, std::placeholders::_1),
       false);
 
-  SimpleActionServer<GraspAction> grasp_action_server(
-      node_handle, "grasp",
-      [=, &grasp_action_server](auto&& goal) {
-        return handleErrors<franka_gripper::GraspAction, franka_gripper::GraspGoalConstPtr,
-                            franka_gripper::GraspResult>(&grasp_action_server, grasp_handler, goal);
-      },
+  SimpleActionServer<GraspAction> grasp_action_server_(
+      node_handle, "grasp", std::bind(handleErrors<GraspAction, GraspGoalConstPtr, GraspResult>,
+                                      &grasp_action_server_, grasp_handler, std::placeholders::_1),
       false);
 
   SimpleActionServer<GripperCommandAction> gripper_command_action_server(
       node_handle, "gripper_action",
-      [=, &gripper, &gripper_command_action_server](auto&& goal) {
-        return gripperCommandExecuteCallback(gripper, default_grasp_epsilon, default_speed,
-                                             &gripper_command_action_server, goal);
-      },
+      std::bind(&gripperCommandExecuteCallback, std::cref(gripper), default_grasp_epsilon,
+                default_speed, &gripper_command_action_server, std::placeholders::_1),
       false);
 
-  homing_action_server.start();
-  stop_action_server.start();
-  move_action_server.start();
-  grasp_action_server.start();
+  homing_action_server_.start();
+  stop_action_server_.start();
+  move_action_server_.start();
+  grasp_action_server_.start();
   gripper_command_action_server.start();
 
   double publish_rate(30.0);
@@ -150,12 +140,6 @@ int main(int argc, char** argv) {
   if (joint_names.size() != 2) {
     ROS_ERROR("franka_gripper_node: Got wrong number of joint_names!");
     return -1;
-  }
-
-  bool stop_at_shutdown(false);
-  if (!node_handle.getParam("stop_at_shutdown", stop_at_shutdown)) {
-    ROS_INFO_STREAM("franka_gripper_node: Could not find parameter stop_at_shutdown. Defaulting to "
-                    << std::boolalpha << stop_at_shutdown);
   }
 
   franka::GripperState gripper_state;
@@ -194,8 +178,5 @@ int main(int argc, char** argv) {
     rate.sleep();
   }
   read_thread.join();
-  if (stop_at_shutdown) {
-    gripper.stop();
-  }
   return 0;
 }

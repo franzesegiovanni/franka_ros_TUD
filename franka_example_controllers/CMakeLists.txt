@@ -130,6 +130,15 @@ target_link_libraries(read_position_bimanual
    ${catkin_LIBRARIES}
    franka_example_controllers
 )
+
+add_executable(bilateral_control
+  src/bilateral_control.cpp
+)
+
+target_link_libraries(bilateral_control
+   ${catkin_LIBRARIES}
+   franka_example_controllers
+)
 ## Installation
 install(TARGETS franka_example_controllers
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
