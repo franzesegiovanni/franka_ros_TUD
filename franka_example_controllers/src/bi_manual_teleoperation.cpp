@@ -17,7 +17,7 @@
 #include <ros/transport_hints.h>
 #include <tf/transform_listener.h>
 #include <tf_conversions/tf_eigen.h>
-#include "sensor_msgs/JointState.h"
+
 namespace franka_example_controllers {
 
 bool DualArmCartesianImpedanceExampleController::initArm(
@@ -144,15 +144,15 @@ bool DualArmCartesianImpedanceExampleController::init(hardware_interface::RobotH
       ros::TransportHints().reliable().tcpNoDelay());
 
   sub_stiffness_ = node_handle.subscribe(
-    "/stiffness_", 20, &DualArmCartesianImpedanceExampleController::equilibriumStiffnessCallback, this,
+    "/sub_stiffness_", 20, &DualArmCartesianImpedanceExampleController::equilibriumStiffnessCallback, this,
     ros::TransportHints().reliable().tcpNoDelay());
 
   sub_nullspace_right_ = node_handle.subscribe(
-    "/nullspace_right_", 20, &DualArmCartesianImpedanceExampleController::equilibriumConfigurationCallback_right, this,
+    "/sub_nullspace_right_", 20, &DualArmCartesianImpedanceExampleController::equilibriumConfigurationCallback_right, this,
     ros::TransportHints().reliable().tcpNoDelay());
 
   sub_nullspace_left_ = node_handle.subscribe(
-    "/nullspace_left_", 20, &DualArmCartesianImpedanceExampleController::equilibriumConfigurationCallback_left, this,
+    "/sub_nullspace_left_", 20, &DualArmCartesianImpedanceExampleController::equilibriumConfigurationCallback_left, this,
     ros::TransportHints().reliable().tcpNoDelay());
 
 
@@ -496,36 +496,28 @@ void DualArmCartesianImpedanceExampleController::equilibriumPoseCallback_left(
     left_arm_data.orientation_d_.coeffs() << -left_arm_data.orientation_d_.coeffs();  
 }
 }
-
-
-void DualArmCartesianImpedanceExampleController::equilibriumConfigurationCallback_right(const sensor_msgs::JointState::ConstPtr& joint) {
-
-  auto& right_arm_data = arms_data_.at(right_arm_id_); 
-  std::vector<double> read_joint_right;
-  read_joint_right= joint -> position;	
-  right_arm_data.q_d_nullspace_(0) = read_joint_right[0];
-  right_arm_data.q_d_nullspace_(1) = read_joint_right[1];
-  right_arm_data.q_d_nullspace_(2) = read_joint_right[2];
-  right_arm_data.q_d_nullspace_(3) = read_joint_right[3];
-  right_arm_data.q_d_nullspace_(4) = read_joint_right[4];
-  right_arm_data.q_d_nullspace_(5) = read_joint_right[5];
-  right_arm_data.q_d_nullspace_(6) = read_joint_right[6];
+void DualArmCartesianImpedanceExampleController::equilibriumConfigurationCallback_left( 
+const std_msgs::Float32MultiArray::ConstPtr& joint) {
+  auto& right_arm_data = arms_data_.at(left_arm_id_);
+  int i = 0;
+  for(std::vector<float>::const_iterator it = joint->data.begin(); it != joint->data.end(); ++it)
+  {
+    right_arm_data.q_d_nullspace_[i] = *it;
+    i++;
+  }
+  return;    
 }
 
-void DualArmCartesianImpedanceExampleController::equilibriumConfigurationCallback_left(const sensor_msgs::JointState::ConstPtr& joint) {
-
-  auto& left_arm_data = arms_data_.at(left_arm_id_); 
-  std::vector<double> read_joint_left;
-  read_joint_left= joint -> position;	
-  left_arm_data.q_d_nullspace_(0) = read_joint_left[0];
-  left_arm_data.q_d_nullspace_(1) = read_joint_left[1];
-  left_arm_data.q_d_nullspace_(2) = read_joint_left[2];
-  left_arm_data.q_d_nullspace_(3) = read_joint_left[3];
-  left_arm_data.q_d_nullspace_(4) = read_joint_left[4];
-  left_arm_data.q_d_nullspace_(5) = read_joint_left[5];
-  left_arm_data.q_d_nullspace_(6) = read_joint_left[6];
-  //std::cout << "left_arm_sub";	
-  //std::cout << 	left_arm_data.q_d_nullspace_;	
+void DualArmCartesianImpedanceExampleController::equilibriumConfigurationCallback_right( 
+const std_msgs::Float32MultiArray::ConstPtr& joint) {
+  auto& left_arm_data = arms_data_.at(right_arm_id_);
+  int i = 0;
+  for(std::vector<float>::const_iterator it = joint->data.begin(); it != joint->data.end(); ++it)
+  {
+    left_arm_data.q_d_nullspace_[i] = *it;
+    i++;
+  }
+  return;    
 }
 }  // namespace franka_example_controllers
 
