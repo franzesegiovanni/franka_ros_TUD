@@ -35,8 +35,6 @@ generate_dynamic_reconfigure_options(
   cfg/compliance_param.cfg
   cfg/desired_mass_param.cfg
   cfg/dual_arm_compliance_param.cfg
-  cfg/teleop_param.cfg
-  cfg/teleop_gripper_param.cfg
 )
 
 catkin_package(
@@ -60,17 +58,10 @@ catkin_package(
 )
 
 add_library(franka_example_controllers
-  src/elbow_example_controller.cpp
-  src/cartesian_pose_example_controller.cpp
-  src/cartesian_velocity_example_controller.cpp
-  src/joint_position_example_controller.cpp
-  src/joint_velocity_example_controller.cpp
   src/model_example_controller.cpp
   src/joint_impedance_example_controller.cpp
   src/cartesian_impedance_example_controller.cpp
-  src/force_example_controller.cpp
   src/dual_arm_cartesian_impedance_example_controller.cpp
-  src/teleop_joint_pd_example_controller.cpp
 )
 
 add_dependencies(franka_example_controllers
@@ -95,23 +86,6 @@ target_include_directories(franka_example_controllers PUBLIC
   include
 )
 
-add_executable(teleop_gripper_node
-  src/teleop_gripper_node.cpp
-)
-target_include_directories(teleop_gripper_node PUBLIC
-  ${catkin_INCLUDE_DIRS}
-)
-target_link_libraries(teleop_gripper_node PUBLIC
-  ${Franka_LIBRARIES}
-  ${catkin_LIBRARIES}
-)
-add_dependencies(teleop_gripper_node
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-  ${PROJECT_NAME}_generate_messages_cpp
-  ${PROJECT_NAME}_gencpp
-  ${PROJECT_NAME}_gencfg
-)
 
 add_executable(read_position
   src/read_position.cpp

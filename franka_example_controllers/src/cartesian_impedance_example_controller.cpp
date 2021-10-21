@@ -105,7 +105,8 @@ bool CartesianImpedanceExampleController::init(hardware_interface::RobotHW* robo
 
   position_d_.setZero();
   orientation_d_.coeffs() << 0.0, 0.0, 0.0, 1.0;
-
+  position_d_target_.setZero();
+  orientation_d_target_.coeffs() << 0.0, 0.0, 0.0, 1.0;
   cartesian_stiffness_.setZero();
   cartesian_damping_.setZero();
 
@@ -129,8 +130,8 @@ void CartesianImpedanceExampleController::starting(const ros::Time& /*time*/) {
   // set equilibrium point to current state
   position_d_ = initial_transform.translation();
   orientation_d_ = Eigen::Quaterniond(initial_transform.linear());
-  position_d_ = initial_transform.translation();
-  orientation_d_ = Eigen::Quaterniond(initial_transform.linear());
+  position_d_target_ = initial_transform.translation();
+  orientation_d_target_ = Eigen::Quaterniond(initial_transform.linear());
   // set nullspace equilibrium configuration to initial q 
   q_d_nullspace_ = q_initial; 
 }
@@ -217,9 +218,16 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   for (size_t i = 0; i < 7; ++i) {
     joint_handles_[i].setCommand(tau_d(i));
   }
+
+  cartesian_stiffness_ =cartesian_stiffness_target_;
+  cartesian_damping_ = cartesian_damping_target_;
+  nullspace_stiffness_ = nullspace_stiffness_target_;
+  position_d_ =position_d_target_;
   Eigen::AngleAxisd aa_orientation_d(orientation_d_);
-  aa_orientation_d.axis() =aa_orientation_d.axis();
-  aa_orientation_d.angle() = aa_orientation_d.angle();
+  
+  Eigen::AngleAxisd aa_orientation_d_target(orientation_d_target_);
+  aa_orientation_d.axis() =aa_orientation_d_target.axis();
+  aa_orientation_d.angle() = aa_orientation_d_target.angle();
   orientation_d_ = Eigen::Quaterniond(aa_orientation_d);
 }
 
@@ -246,21 +254,21 @@ void CartesianImpedanceExampleController::equilibriumStiffnessCallback(
     i++;
   }
 
-  cartesian_stiffness_(0,0)=std::max(std::min(stiff_[0], float(4000.0)), float(0.0));
-  cartesian_stiffness_(1,1)=std::max(std::min(stiff_[1], float(4000.0)), float(0.0));
-  cartesian_stiffness_(2,2)=std::max(std::min(stiff_[2], float(4000.0)), float(0.0));
+  cartesian_stiffness_target_(0,0)=std::max(std::min(stiff_[0], float(4000.0)), float(0.0));
+  cartesian_stiffness_target_(1,1)=std::max(std::min(stiff_[1], float(4000.0)), float(0.0));
+  cartesian_stiffness_target_(2,2)=std::max(std::min(stiff_[2], float(4000.0)), float(0.0));
 
-  cartesian_damping_(0,0)=2.0 * sqrt(cartesian_stiffness_(0,0));
-  cartesian_damping_(1,1)=2.0 * sqrt(cartesian_stiffness_(1,1));
-  cartesian_damping_(2,2)=2.0 * sqrt(cartesian_stiffness_(2,2));
+  cartesian_damping_target_(0,0)=2.0 * sqrt(cartesian_stiffness_target_(0,0));
+  cartesian_damping_target_(1,1)=2.0 * sqrt(cartesian_stiffness_target_(1,1));
+  cartesian_damping_target_(2,2)=2.0 * sqrt(cartesian_stiffness_target_(2,2));
 
-  cartesian_stiffness_(3,3)=std::max(std::min(stiff_[3], float(50.0)), float(0.0));
-  cartesian_stiffness_(4,4)=std::max(std::min(stiff_[4], float(50.0)), float(0.0));
-  cartesian_stiffness_(5,5)=std::max(std::min(stiff_[5], float(50.0)), float(0.0));
+  cartesian_stiffness_target_(3,3)=std::max(std::min(stiff_[3], float(50.0)), float(0.0));
+  cartesian_stiffness_target_(4,4)=std::max(std::min(stiff_[4], float(50.0)), float(0.0));
+  cartesian_stiffness_target_(5,5)=std::max(std::min(stiff_[5], float(50.0)), float(0.0));
 
-  cartesian_damping_(3,3)=2.0 * sqrt(cartesian_stiffness_(3,3));
-  cartesian_damping_(4,4)=2.0 * sqrt(cartesian_stiffness_(4,4));
-  cartesian_damping_(5,5)=2.0 * sqrt(cartesian_stiffness_(5,5)); 
+  cartesian_damping_target_(3,3)=2.0 * sqrt(cartesian_stiffness_target_(3,3));
+  cartesian_damping_target_(4,4)=2.0 * sqrt(cartesian_stiffness_target_(4,4));
+  cartesian_damping_target_(5,5)=2.0 * sqrt(cartesian_stiffness_target_(5,5)); 
 
   nullspace_stiffness_= std::max(std::min(stiff_[6], float(20.0)), float(0.0));
 
@@ -268,49 +276,49 @@ void CartesianImpedanceExampleController::equilibriumStiffnessCallback(
   dynamic_reconfigure::Config set_Kx;
   dynamic_reconfigure::DoubleParameter param_X_double;
   param_X_double.name = "translational_stiffness_X";
-  param_X_double.value = cartesian_stiffness_(0,0);
+  param_X_double.value = cartesian_stiffness_target_(0,0);
   set_Kx.doubles = {param_X_double};
   pub_stiff_update_.publish(set_Kx);
 
   dynamic_reconfigure::Config set_Ky;
   dynamic_reconfigure::DoubleParameter param_Y_double;
   param_Y_double.name = "translational_stiffness_Y";
-  param_Y_double.value = cartesian_stiffness_(1,1);
+  param_Y_double.value = cartesian_stiffness_target_(1,1);
   set_Ky.doubles = {param_Y_double};
   pub_stiff_update_.publish(set_Ky);
 
   dynamic_reconfigure::Config set_Kz;
   dynamic_reconfigure::DoubleParameter param_Z_double;
   param_Z_double.name = "translational_stiffness_Z";
-  param_Z_double.value = cartesian_stiffness_(2,2);
+  param_Z_double.value = cartesian_stiffness_target_(2,2);
   set_Kz.doubles = {param_Z_double};
   pub_stiff_update_.publish(set_Kz);
 
   dynamic_reconfigure::Config set_K_alpha;
   dynamic_reconfigure::DoubleParameter param_alpha_double;
   param_alpha_double.name = "rotational_stiffness_X";
-  param_alpha_double.value = cartesian_stiffness_(3,3);
+  param_alpha_double.value = cartesian_stiffness_target_(3,3);
   set_K_alpha.doubles = {param_alpha_double};
   pub_stiff_update_.publish(set_K_alpha);
 
   dynamic_reconfigure::Config set_K_beta;
   dynamic_reconfigure::DoubleParameter param_beta_double;
   param_beta_double.name = "rotational_stiffness_Y";
-  param_beta_double.value = cartesian_stiffness_(4,4);
+  param_beta_double.value = cartesian_stiffness_target_(4,4);
   set_K_beta.doubles = {param_beta_double};
   pub_stiff_update_.publish(set_K_beta);
 
   dynamic_reconfigure::Config set_K_gamma;
   dynamic_reconfigure::DoubleParameter param_gamma_double;
   param_gamma_double.name = "rotational_stiffness_Z";
-  param_gamma_double.value = cartesian_stiffness_(5,5);
+  param_gamma_double.value = cartesian_stiffness_target_(5,5);
   set_K_gamma.doubles = {param_gamma_double};
   pub_stiff_update_.publish(set_K_gamma);
 
   dynamic_reconfigure::Config set_nullspace;
   dynamic_reconfigure::DoubleParameter param_nullspace_double;
   param_nullspace_double.name = "nullspace_stiffness";
-  param_nullspace_double.value = nullspace_stiffness_;
+  param_nullspace_double.value = nullspace_stiffness_target_;
   set_nullspace.doubles = {param_nullspace_double};
   pub_stiff_update_.publish(set_nullspace);
   
@@ -319,21 +327,21 @@ void CartesianImpedanceExampleController::equilibriumStiffnessCallback(
 void CartesianImpedanceExampleController::complianceParamCallback(
     franka_example_controllers::compliance_paramConfig& config,
     uint32_t /*level*/) {
-  cartesian_stiffness_.setIdentity();
-  cartesian_stiffness_(0,0)=config.translational_stiffness_X;
-  cartesian_stiffness_(1,1)=config.translational_stiffness_Y;
-  cartesian_stiffness_(2,2)=config.translational_stiffness_Z;
-  cartesian_stiffness_(3,3)=config.rotational_stiffness_X;
-  cartesian_stiffness_(4,4)=config.rotational_stiffness_Y;
-  cartesian_stiffness_(5,5)=config.rotational_stiffness_Z;
+  cartesian_stiffness_target_.setIdentity();
+  cartesian_stiffness_target_(0,0)=config.translational_stiffness_X;
+  cartesian_stiffness_target_(1,1)=config.translational_stiffness_Y;
+  cartesian_stiffness_target_(2,2)=config.translational_stiffness_Z;
+  cartesian_stiffness_target_(3,3)=config.rotational_stiffness_X;
+  cartesian_stiffness_target_(4,4)=config.rotational_stiffness_Y;
+  cartesian_stiffness_target_(5,5)=config.rotational_stiffness_Z;
   
-  cartesian_damping_(0,0)=2.0 * sqrt(config.translational_stiffness_X);
-  cartesian_damping_(1,1)=2.0 * sqrt(config.translational_stiffness_Y);
-  cartesian_damping_(2,2)=2.0 * sqrt(config.translational_stiffness_Z);
-  cartesian_damping_(3,3)=2.0 * sqrt(config.rotational_stiffness_X);
-  cartesian_damping_(4,4)=2.0 * sqrt(config.rotational_stiffness_Y);
-  cartesian_damping_(5,5)=2.0 * sqrt(config.rotational_stiffness_Z);
-  nullspace_stiffness_ = config.nullspace_stiffness;
+  cartesian_damping_target_(0,0)=2.0 * sqrt(config.translational_stiffness_X);
+  cartesian_damping_target_(1,1)=2.0 * sqrt(config.translational_stiffness_Y);
+  cartesian_damping_target_(2,2)=2.0 * sqrt(config.translational_stiffness_Z);
+  cartesian_damping_target_(3,3)=2.0 * sqrt(config.rotational_stiffness_X);
+  cartesian_damping_target_(4,4)=2.0 * sqrt(config.rotational_stiffness_Y);
+  cartesian_damping_target_(5,5)=2.0 * sqrt(config.rotational_stiffness_Z);
+  nullspace_stiffness_target_ = config.nullspace_stiffness;
 }
 
 

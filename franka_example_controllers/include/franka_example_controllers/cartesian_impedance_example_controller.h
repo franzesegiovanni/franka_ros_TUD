@@ -47,14 +47,19 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   std::vector<hardware_interface::JointHandle> joint_handles_;
 
   double nullspace_stiffness_{20.0};
+  double nullspace_stiffness_target_{20.0};
   const double delta_tau_max_{1.0};
   Eigen::Matrix<double, 6, 6> cartesian_stiffness_;
   Eigen::Matrix<double, 6, 6> cartesian_damping_;
   Eigen::Matrix<double, 7, 1> q_d_nullspace_;
+  Eigen::Matrix<double, 6, 6> cartesian_stiffness_target_;
+  Eigen::Matrix<double, 6, 6> cartesian_damping_target_;
+
   Eigen::Matrix<float, 7, 1> stiff_;
   Eigen::Vector3d position_d_;
   Eigen::Quaterniond orientation_d_;
-
+  Eigen::Vector3d position_d_target_;
+  Eigen::Quaterniond orientation_d_target_;
   // Dynamic reconfigure
   std::unique_ptr<dynamic_reconfigure::Server<franka_example_controllers::compliance_paramConfig>>
       dynamic_server_compliance_param_;
