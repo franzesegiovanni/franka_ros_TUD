@@ -1,6 +1,5 @@
 # ROS integration for Franka Emika research robot
 # Impedance Controller CoR Lab TU Delft
-
 [![Build Status][travis-status]][travis]
 
 See the [Franka Control Interface (FCI) documentation][fci-docs] for more information.
@@ -22,6 +21,11 @@ For more informations or info please send an email to the mail to g.franzese@tud
 
 The author of the repository wil not take any responsability in case of undesired behaviour of the repository. Please refer to the original one in case you were not directly asked to use this repository.
 
+## This repository was tested with libfranka --
+## The ros version is noetic
+## The Linux version is 20
+
+
 ## How to install the controller
 https://frankaemika.github.io/docs/installation_linux.html#building-the-ros-packages 
 1. Be sure to have libfranka installed 
@@ -39,6 +43,7 @@ rosrun franka_example_controllers read_position
 rosrun franka_gripper franka_gripper_online
 
 To change the width of the gripper you can publish 
-rostopic pub /gripper_move msgs/Float32 "data: 0.01"  
+rostopic pub /gripper_online msgs/Float32 "data: 0.01"  
 in the data you can specify your desired gripper width in meters.
+
 ## 
