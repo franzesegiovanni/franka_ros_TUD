@@ -58,8 +58,6 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   Eigen::Matrix<float, 7, 1> stiff_;
   Eigen::Vector3d position_d_;
   Eigen::Quaterniond orientation_d_;
-  Eigen::Vector3d position_d_target_;
-  Eigen::Quaterniond orientation_d_target_;
   // Dynamic reconfigure
   std::unique_ptr<dynamic_reconfigure::Server<franka_example_controllers::compliance_paramConfig>>
       dynamic_server_compliance_param_;

@@ -128,10 +128,10 @@ void CartesianImpedanceExampleController::starting(const ros::Time& /*time*/) {
   Eigen::Map<Eigen::Matrix<double, 7, 1> > q_initial(initial_state.q.data());
   Eigen::Affine3d initial_transform(Eigen::Matrix4d::Map(initial_state.O_T_EE.data()));
   // set equilibrium point to current state
-  position_d_ = initial_transform.translation();
-  orientation_d_ = Eigen::Quaterniond(initial_transform.linear());
-  position_d_target_ = initial_transform.translation();
-  orientation_d_target_ = Eigen::Quaterniond(initial_transform.linear());
+  position_d_ = initial_transform.translation(); // this allows the robot to start on the starting configuration
+  orientation_d_ = Eigen::Quaterniond(initial_transform.linear()); // this allows the robot to start on the starting configuration
+  //position_d_target_ = initial_transform.translation();
+  //orientation_d_target_ = Eigen::Quaterniond(initial_transform.linear());
   // set nullspace equilibrium configuration to initial q 
   q_d_nullspace_ = q_initial; 
 }
@@ -222,12 +222,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   cartesian_stiffness_ =cartesian_stiffness_target_;
   cartesian_damping_ = cartesian_damping_target_;
   nullspace_stiffness_ = nullspace_stiffness_target_;
-  position_d_ =position_d_target_;
   Eigen::AngleAxisd aa_orientation_d(orientation_d_);
-  
-  Eigen::AngleAxisd aa_orientation_d_target(orientation_d_target_);
-  aa_orientation_d.axis() =aa_orientation_d_target.axis();
-  aa_orientation_d.angle() = aa_orientation_d_target.angle();
   orientation_d_ = Eigen::Quaterniond(aa_orientation_d);
 }
 
