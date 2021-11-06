@@ -17,7 +17,7 @@ This repository does only contain the impedance controller that is used in the C
 This impedance control allows to control the stiffness with a node in real time without using a server in the three different cartesian directions, rotations and null-space control. It also allow to have as input a desired configuriation control for doing null-space control. 
 
 
-For more informations or info please send an email to the mail to g.franzese@tudelft.nl
+For more informations or info please send an email to Giovanni  at g.franzese@tudelft.nl
 
 The author of the repository wil not take any responsability in case of undesired behaviour of the repository. Please refer to the original one in case you were not directly asked to use this repository.
 
