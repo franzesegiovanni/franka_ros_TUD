@@ -21,9 +21,7 @@ For more informations or info please send an email to Giovanni  at g.franzese@tu
 
 The author of the repository wil not take any responsability in case of undesired behaviour of the repository. Please refer to the original one in case you were not directly asked to use this repository.
 
-## This repository was tested with libfranka 0.8
-## The ros version is noetic
-## The Linux version is 20
+This repository was tested with libfranka 0.8 with ros noetic in Ubuntu 20.
 
 
 ## How to install the controller
