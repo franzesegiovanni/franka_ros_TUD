@@ -44,4 +44,16 @@ To change the width of the gripper you can publish
 rostopic pub /gripper_online msgs/Float32 "data: 0.01"  
 in the data you can specify your desired gripper width in meters.
 
-## 
+## Stiffness modulation with topic
+In this version of the code you can perform a fast modulation of the stiffness of the end effector cartesian position, orientation and null-space without necessity of using a service. You will also see it displayed in the usual interface. In the topic vector, please send the stiffness in the order that are displayed in the graphic interface. 
+
+## Change of the Jacobian Matrix
+In case you do not want to do a pure cartesian impedance control but you want to control only position and have the orientation controlled as null-space control, it is enough to modify the jacobian matrix in this way. 
+Remember that the order of variables are x,y,z,rx,ry,rz. 
+  Eigen::Map<Eigen::Matrix<double, 6, 7> > jacobian(jacobian_array.data());
+  for(int i=3; i<6; i++){
+    for(int j=0; j<7; j++){
+      jacobian_EE(i, j) = 0;
+    }
+  }
+  
