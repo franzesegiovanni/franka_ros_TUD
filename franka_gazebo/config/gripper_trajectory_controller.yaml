@@ -1,0 +1,11 @@
+panda_gripper_trajectory_controller:
+  type: effort_controllers/JointTrajectoryController
+  joints:
+    - panda_finger_joint1
+    - panda_finger_joint2
+
+  gains:
+    panda_finger_joint1: { p: 5, d: 3.0, i: 0, i_clamp: 1 }
+    panda_finger_joint2: { p: 5, d: 1.0, i: 0, i_clamp: 1 }
+
+  state_publish_rate: 25

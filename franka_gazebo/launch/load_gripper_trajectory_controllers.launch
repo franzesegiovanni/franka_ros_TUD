@@ -1,0 +1,8 @@
+<!-- Launch file for launching the robot controllers -->
+<launch>
+    <!--Load controller parameters-->
+    <rosparam file="$(find franka_gazebo)/config/gripper_trajectory_controller.yaml" command="load"/>
+
+    <!--Load the controllers-->
+    <node name="gripper_trajectory_controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="panda_gripper_trajectory_controller"/>
+</launch>

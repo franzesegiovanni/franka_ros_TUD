@@ -18,7 +18,7 @@
         </inertia>
         <pose>0 0 0 0 -0 0</pose>
       </inertial>
-        <self_collide>0</self_collide>
+      <self_collide>0</self_collide>
       <kinematic>0</kinematic>
       <enable_wind>0</enable_wind>
       <pose>0 0 0 0 -0 0</pose>
@@ -54,8 +54,8 @@
           -->
           <friction>
             <ode>
-              <mu>0.6</mu>
-              <mu2>0.6</mu2>
+              <mu>100</mu>
+              <mu2>100</mu2>
               <fdir1>0 0 0</fdir1>
               <slip1>0</slip1>
               <slip2>0</slip2>
