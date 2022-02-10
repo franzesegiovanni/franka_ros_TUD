@@ -27,7 +27,7 @@ position_joint_trajectory_controller:
 
 franka_state_controller:
   type: franka_control/FrankaStateController
-  publish_rate: 30  # [Hz]
+  publish_rate: 500  # [Hz]
   joint_names:
     - panda_joint1
     - panda_joint2
