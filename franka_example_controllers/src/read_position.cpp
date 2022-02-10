@@ -50,9 +50,9 @@ int main(int argc, char **argv)
   ros::NodeHandle node_position;
   ros::Rate loop_rate(100); 
 
-  ros::Subscriber sub = node_position.subscribe("/franka_state_controller/franka_states", 1000, chatterCallback);
+  ros::Subscriber sub = node_position.subscribe("/franka_state_controller/franka_states", 1, chatterCallback);
 
-  ros::Publisher pub = node_position.advertise<geometry_msgs::PoseStamped>("/cartesian_pose", 1000);
+  ros::Publisher pub = node_position.advertise<geometry_msgs::PoseStamped>("/cartesian_pose", 1);
   
 
   //std_msgs::Float32MultiArray msg;
