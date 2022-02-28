@@ -28,14 +28,12 @@ This repository was tested with libfranka 0.8 with ros noetic in Ubuntu 20.
 https://frankaemika.github.io/docs/installation_linux.html#building-the-ros-packages 
 1. Be sure to have libfranka installed 
 2. create a new workspace
-3. clone this folder in the scr foulder and not the orginal one. 
+3. clone this folder in the scr foulder
 4. catkin_make -DMAKE_BUILD_TYPE=Release -DFranka_DIR:PATH=<path/to/libfranka>
 
 ## How to start the impedance controller 
 roslaunch franka_example_controllers cartesian_impedance_example_controller.launch robot_ip:=<robot_ip> load_gripper:=True
 
-## How to run a publisher for reading the current robot position and orientation without the need of special message types. 
-rosrun franka_example_controllers read_position
 
 ## How to control the gripper
 rosrun franka_gripper franka_gripper_online
