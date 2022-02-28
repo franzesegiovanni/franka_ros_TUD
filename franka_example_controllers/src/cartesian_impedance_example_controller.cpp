@@ -30,9 +30,9 @@ bool CartesianImpedanceExampleController::init(hardware_interface::RobotHW* robo
   pub_stiff_update_ = node_handle.advertise<dynamic_reconfigure::Config>(
     "/dynamic_reconfigure_compliance_param_node/parameter_updates", 5);
 
-  pub_cartesian_pose_= node_handle.advertise<geometry_msgs::PoseStamped>("/cartesian_pose",1)
+  pub_cartesian_pose_= node_handle.advertise<geometry_msgs::PoseStamped>("/cartesian_pose",1);
     
-  pub_force_torque_= node_handle.advertise<geometry_msgs::WrenchStamped>("/force_torque_ext",1)
+  pub_force_torque_= node_handle.advertise<geometry_msgs::WrenchStamped>("/force_torque_ext",1);
     
   std::string arm_id;
   if (!node_handle.getParam("arm_id", arm_id)) {
@@ -155,6 +155,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   Eigen::Map<Eigen::Matrix<double, 7, 1> > dq(robot_state.dq.data());
   Eigen::Map<Eigen::Matrix<double, 7, 1> > tau_J_d(  // NOLINT (readability-identifier-naming)
       robot_state.tau_J_d.data());
+  Eigen::Map<Eigen::Matrix<double, 6, 1> > force_torque(robot_state.O_F_ext_hat_K.data());
   Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
   Eigen::Vector3d position(transform.translation());
   Eigen::Quaterniond orientation(transform.linear());
@@ -173,11 +174,11 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   pose_msg.pose.position.x=position[0];
   pose_msg.pose.position.y=position[1];
   pose_msg.pose.position.z=position[2];
-  pose_msg.pose.orinetation.x=orientation.x();
+  pose_msg.pose.orientation.x=orientation.x();
   pose_msg.pose.orientation.y=orientation.y();
   pose_msg.pose.orientation.z=orientation.z();
   pose_msg.pose.orientation.w=orientation.w();
-  pub_cartesian_pose_.publish(pose_msgs);
+  pub_cartesian_pose_.publish(pose_msg);
   // compute error to desired pose
   // position error
   Eigen::Matrix<double, 6, 1> error;
