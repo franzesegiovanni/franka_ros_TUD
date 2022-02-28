@@ -78,7 +78,13 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   ros::Subscriber sub_stiffness_;
   void equilibriumStiffnessCallback(const std_msgs::Float32MultiArray::ConstPtr& stiffness_);
 
-  ros::Publisher pub_stiff_update_; 
+  ros::Publisher pub_stiff_update_;
+                                                  
+  ros::Publisher pub_cartesian_pose_;
+  ros::Publisher pub_force_torque_;
+  
+                                                
+                                                  
 
 };
 
