@@ -28,7 +28,7 @@ This repository was tested with libfranka 0.8 with ros noetic in Ubuntu 20.
 https://frankaemika.github.io/docs/installation_linux.html#building-the-ros-packages 
 1. Be sure to have libfranka installed 
 2. create a new workspace
-3. clone this folder in the scr foulder
+3. clone this folder in the scr folder
 4. catkin_make -DMAKE_BUILD_TYPE=Release -DFranka_DIR:PATH=<path/to/libfranka>
 
 ## How to start the impedance controller 
