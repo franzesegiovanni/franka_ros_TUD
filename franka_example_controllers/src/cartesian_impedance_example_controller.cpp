@@ -30,6 +30,10 @@ bool CartesianImpedanceExampleController::init(hardware_interface::RobotHW* robo
   pub_stiff_update_ = node_handle.advertise<dynamic_reconfigure::Config>(
     "/dynamic_reconfigure_compliance_param_node/parameter_updates", 5);
 
+  pub_cartesian_pose_= node_handle.advertise<geometry_msgs::PoseStamped>("/cartesian_pose",1)
+    
+  pub_force_torque_= node_handle.advertise<geometry_msgs::WrenchStamped>("/force_torque_ext",1)
+    
   std::string arm_id;
   if (!node_handle.getParam("arm_id", arm_id)) {
     ROS_ERROR_STREAM("CartesianImpedanceExampleController: Could not read parameter arm_id");
@@ -154,6 +158,26 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
   Eigen::Vector3d position(transform.translation());
   Eigen::Quaterniond orientation(transform.linear());
+  
+  // publish force, torque
+  geometry_msgs::WrenchStamped force_torque_msg;
+  force_torque_msg.wrench.force.x=force_torque[0];
+  force_torque_msg.wrench.force.x=force_torque[1];
+  force_torque_msg.wrench.force.x=force_torque[2];
+  force_torque_msg.wrench.torque.x=force_torque[3];
+  force_torque_msg.wrench.torque.y=force_torque[4];
+  force_torque_msg.wrench.torque.z=force_torque[5];
+  pub_force_torque_.publish(force_torque_msg);
+  
+  geometry_msgs::PoseStamped pose_msg;
+  pose_msg.pose.position.x=position[0];
+  pose_msg.pose.position.y=position[1];
+  pose_msg.pose.position.z=position[2];
+  pose_msg.pose.orinetation.x=orientation.x();
+  pose_msg.pose.orientation.y=orientation.y();
+  pose_msg.pose.orientation.z=orientation.z();
+  pose_msg.pose.orientation.w=orientation.w();
+  pub_cartesian_pose_.publish(pose_msgs);
   // compute error to desired pose
   // position error
   Eigen::Matrix<double, 6, 1> error;
