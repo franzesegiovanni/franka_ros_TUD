@@ -33,6 +33,7 @@ https://frankaemika.github.io/docs/installation_linux.html#building-the-ros-pack
 4. Make the repository specifying where libfranka is located.
 
 **catkin_make -DMAKE_BUILD_TYPE=Release -DFranka_DIR:PATH=<path/to/libfranka>**
+
 5. Source ros in the repository 
 **source devel/setup.sh**
 
