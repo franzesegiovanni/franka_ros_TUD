@@ -5,6 +5,7 @@
 #include <cmath>
 
 #include <controller_interface/controller_base.h>
+#include <franka_example_controllers/franka_model.h>
 #include <franka/robot_state.h>
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
@@ -155,16 +156,31 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   Eigen::Map<Eigen::Matrix<double, 7, 1> > dq(robot_state.dq.data());
   Eigen::Map<Eigen::Matrix<double, 7, 1> > tau_J_d(  // NOLINT (readability-identifier-naming)
       robot_state.tau_J_d.data());
-  Eigen::Map<Eigen::Matrix<double, 6, 1> > force_torque(robot_state.O_F_ext_hat_K.data());
+  Eigen::Map<Eigen::Matrix<double, 7, 1> > tau_ext(robot_state.tau_ext_hat_filtered.data());
+  Eigen::Matrix<double, 6, 1> force_torque;
+  //Eigen::Map<Eigen::Matrix<double, 6, 1> > force_torque(robot_state.O_F_ext_hat_K.data());
   Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
   Eigen::Vector3d position(transform.translation());
   Eigen::Quaterniond orientation(transform.linear());
-  
+  Eigen::Matrix<double, 7, 1>  tau_f;
+  //Eigen::Vector7d tau_f = Eigen::Vector7d::Zero();
+  Eigen::MatrixXd jacobian_transpose_pinv;
+  Eigen::MatrixXd Null_mat;
+  pseudoInverse(jacobian.transpose(), jacobian_transpose_pinv);
+  tau_f(0) =  FI_11/(1+exp(-FI_21*(dq(0)+FI_31))) - TAU_F_CONST_1;
+  tau_f(1) =  FI_12/(1+exp(-FI_22*(dq(1)+FI_32))) - TAU_F_CONST_2;
+  tau_f(2) =  FI_13/(1+exp(-FI_23*(dq(2)+FI_33))) - TAU_F_CONST_3;
+  tau_f(3) =  FI_14/(1+exp(-FI_24*(dq(3)+FI_34))) - TAU_F_CONST_4;
+  tau_f(4) =  FI_15/(1+exp(-FI_25*(dq(4)+FI_35))) - TAU_F_CONST_5;
+  tau_f(5) =  FI_16/(1+exp(-FI_26*(dq(5)+FI_36))) - TAU_F_CONST_6;
+  tau_f(6) =  FI_17/(1+exp(-FI_27*(dq(6)+FI_37))) - TAU_F_CONST_7;
+  force_torque=-jacobian_transpose_pinv*(tau_ext-tau_f);
+  //force_torque=force_torque+jacobian_transpose_pinv*tau_f;
   // publish force, torque
   geometry_msgs::WrenchStamped force_torque_msg;
   force_torque_msg.wrench.force.x=force_torque[0];
-  force_torque_msg.wrench.force.x=force_torque[1];
-  force_torque_msg.wrench.force.x=force_torque[2];
+  force_torque_msg.wrench.force.y=force_torque[1];
+  force_torque_msg.wrench.force.z=force_torque[2];
   force_torque_msg.wrench.torque.x=force_torque[3];
   force_torque_msg.wrench.torque.y=force_torque[4];
   force_torque_msg.wrench.torque.z=force_torque[5];
@@ -201,9 +217,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
 
   // pseudoinverse for nullspace handling
   // kinematic pseuoinverse
-  Eigen::MatrixXd jacobian_transpose_pinv;
-  Eigen::MatrixXd Null_mat;
-  pseudoInverse(jacobian.transpose(), jacobian_transpose_pinv);
+
   Null_mat=(Eigen::MatrixXd::Identity(7, 7) -jacobian.transpose() * jacobian_transpose_pinv);
   null_vect.setZero();
   null_vect(0)=(q_d_nullspace_(0) - q(0));
