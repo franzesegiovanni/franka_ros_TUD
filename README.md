@@ -26,16 +26,13 @@ The author of the repository wil not take any responsability in case of undesire
 ## How to install the controller
 https://frankaemika.github.io/docs/installation_linux.html#building-the-ros-packages 
 1. Be sure to have libfranka installed 
-2. create a new catkin workspace:
-cd /path/to/desired/folder
-mkdir -p catkin_ws/src
-cd catkin_ws
-source /opt/ros/kinetic/setup.sh
-catkin_init_workspace src
-3. clone this folder in the scr folder
-gito clone https://github.com/giovannifranzese94/franka_ros_TUD.git src/franka_ros_TUD
-4. Make the repository specifying where is the libfranka.
-catkin_make -DMAKE_BUILD_TYPE=Release -DFranka_DIR:PATH=<path/to/libfranka>
+2. create a new catkin workspace catkin_ws:
+3. Creat a src folder catkin_ws/src
+3. clone this folder in the src folder
+**git clone https://github.com/giovannifranzese94/franka_ros_TUD.git src/franka_ros_TUD**
+4. Make the repository specifying where libfranka is located.
+
+**catkin_make -DMAKE_BUILD_TYPE=Release -DFranka_DIR:PATH=<path/to/libfranka>**
 5. Source ros in the repository 
 **source devel/setup.sh**
 
