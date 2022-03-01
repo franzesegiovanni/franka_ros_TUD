@@ -24,7 +24,7 @@ bool CartesianImpedanceExampleController::init(hardware_interface::RobotHW* robo
       ros::TransportHints().reliable().tcpNoDelay());
   // We want to add the subscriber to the note for reading the desired stiffness in the different directions
   sub_stiffness_ = node_handle.subscribe(
-    "/sub_stiffness_", 20, &CartesianImpedanceExampleController::equilibriumStiffnessCallback, this,
+    "/stiffness", 20, &CartesianImpedanceExampleController::equilibriumStiffnessCallback, this,
     ros::TransportHints().reliable().tcpNoDelay());
 
   pub_stiff_update_ = node_handle.advertise<dynamic_reconfigure::Config>(
