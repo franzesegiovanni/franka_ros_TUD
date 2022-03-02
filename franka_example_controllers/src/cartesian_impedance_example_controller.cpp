@@ -138,7 +138,8 @@ void CartesianImpedanceExampleController::starting(const ros::Time& /*time*/) {
   //position_d_target_ = initial_transform.translation();
   //orientation_d_target_ = Eigen::Quaterniond(initial_transform.linear());
   // set nullspace equilibrium configuration to initial q 
-  q_d_nullspace_ = q_initial; 
+  q_d_nullspace_ = q_initial;
+  force_torque_old.setZero(); 
 }
 
 void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
@@ -159,7 +160,6 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   Eigen::Map<Eigen::Matrix<double, 7, 1> > tau_ext(robot_state.tau_ext_hat_filtered.data());
   //Eigen::Map<Eigen::Matrix<double, 7, 1>> gravity = model_handle_->getGravity();
   std::array<double, 7> gravity = model_handle_->getGravity();
-  Eigen::Matrix<double, 6, 1> force_torque;
   //Eigen::Map<Eigen::Matrix<double, 6, 1> > force_torque(robot_state.O_F_ext_hat_K.data());
   Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
   Eigen::Vector3d position(transform.translation());
@@ -190,17 +190,18 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   // publish force, torque
   filter_step=filter_step+1;
   filter_step_=10;
-  alpha=0.8
+  alpha=1;
   if (filter_step==filter_step_){ 
     geometry_msgs::WrenchStamped force_torque_msg;
     
-    force_torque_msg.wrench.force.x=force_torque_msg.wrench.force.x*(1-alpha)+force_torque[0]/(filter_step_)*alpha;
-    force_torque_msg.wrench.force.y= force_torque_msg.wrench.force.y*(1-alpha)+force_torque[1]/(filter_step_)*alpha;
-    force_torque_msg.wrench.force.z=force_torque_msg.wrench.force.z*(1-alpha)+force_torque[2]/(filter_step_)*alpha;
-    force_torque_msg.wrench.torque.x=force_torque_msg.wrench.torque.x*(1-alpha)+force_torque[3]/(filter_step_)*alpha;
-    force_torque_msg.wrench.torque.y= force_torque_msg.wrench.torque.y*(1-alpha)+force_torque[4]/(filter_step_)*alpha;
-    force_torque_msg.wrench.torque.z=force_torque_msg.wrench.torque.z*(1-alpha)+force_torque[5]/(filter_step_)*alpha;
+    force_torque_msg.wrench.force.x=force_torque_old[0]*(1-alpha)+force_torque[0]*alpha/(filter_step_);
+    force_torque_msg.wrench.force.y=force_torque_old[1]*(1-alpha)+ force_torque[1]*alpha/(filter_step_);
+    force_torque_msg.wrench.force.z=force_torque_old[2]*(1-alpha)+force_torque[2]*alpha/(filter_step_);
+    force_torque_msg.wrench.torque.x=force_torque_old[3]*(1-alpha)+force_torque[3]*alpha/(filter_step_);
+    force_torque_msg.wrench.torque.y=force_torque_old[4]*(1-alpha)+force_torque[4]*alpha/(filter_step_);
+    force_torque_msg.wrench.torque.z=force_torque_old[5]*(1-alpha)+force_torque[5]*alpha/(filter_step_);
     pub_force_torque_.publish(force_torque_msg);
+    force_torque_old=force_torque/(filter_step_);
     force_torque.setZero();
     filter_step=0;
     }
