@@ -49,6 +49,7 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   double nullspace_stiffness_{20.0};
   double nullspace_stiffness_target_{20.0};
   double dt{0.001};
+  double time_old;
   int alpha;
   int filter_step{0};
   int filter_step_;
@@ -65,6 +66,7 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   Eigen::Matrix<float, 7, 1> stiff_;
   Eigen::Vector3d position_d_;
   Eigen::Quaterniond orientation_d_;
+
   // Dynamic reconfigure
   std::unique_ptr<dynamic_reconfigure::Server<franka_example_controllers::compliance_paramConfig>>
       dynamic_server_compliance_param_;

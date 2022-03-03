@@ -150,7 +150,8 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   // get state variables
   franka::RobotState robot_state = state_handle_->getRobotState();
   std::array<double, 7> coriolis_array = model_handle_->getCoriolis();
-  std::array<double, 49> mass = model_handle_->getMass();
+  std::array<double, 49> mass_array = model_handle_->getMass();
+  Eigen::Map<Eigen::Matrix<double, 7, 7> > mass(mass_array.data());
   std::array<double, 42> jacobian_array =
       model_handle_->getZeroJacobian(franka::Frame::kEndEffector); 
 
