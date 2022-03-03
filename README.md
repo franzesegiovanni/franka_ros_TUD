@@ -1,5 +1,6 @@
-# ROS integration for Franka Emika research robot
-# Impedance Controller CoR Lab TU Delft
+# Impedance Controller CoR Lab TU Delft for Franka Emika Panda
+This repository is a modification file of the original repository of Franka. You can do many things that the original repository does not allow you to do. 
+
 [![Build Status][travis-status]][travis]
 
 See the [Franka Control Interface (FCI) documentation][fci-docs] for more information.
