@@ -46,8 +46,8 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   std::unique_ptr<franka_hw::FrankaModelHandle> model_handle_;
   std::vector<hardware_interface::JointHandle> joint_handles_;
 
-  double nullspace_stiffness_{20.0};
-  double nullspace_stiffness_target_{20.0};
+  double nullspace_stiffness_{0.0};
+  double nullspace_stiffness_target_{0.0};
   double dt{0.001};
   double time_old;
   int alpha;
@@ -61,8 +61,6 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   Eigen::Matrix<double, 6, 6> cartesian_damping_target_;
   Eigen::Matrix<double, 6, 1> force_torque;
   Eigen::Matrix<double, 6, 1> force_torque_old;
-  Eigen::Matrix<double, 7, 1> dq_old;
-  Eigen::Matrix<double, 7, 1> ddq;
   Eigen::Matrix<float, 7, 1> stiff_;
   Eigen::Vector3d position_d_;
   Eigen::Quaterniond orientation_d_;
