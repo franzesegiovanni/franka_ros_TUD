@@ -48,6 +48,7 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
 
   double nullspace_stiffness_{20.0};
   double nullspace_stiffness_target_{20.0};
+  double dt{0.001};
   int alpha;
   int filter_step{0};
   int filter_step_;
@@ -59,6 +60,8 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   Eigen::Matrix<double, 6, 6> cartesian_damping_target_;
   Eigen::Matrix<double, 6, 1> force_torque;
   Eigen::Matrix<double, 6, 1> force_torque_old;
+  Eigen::Matrix<double, 7, 1> dq_old;
+  Eigen::Matrix<double, 7, 1> ddq;
   Eigen::Matrix<float, 7, 1> stiff_;
   Eigen::Vector3d position_d_;
   Eigen::Quaterniond orientation_d_;

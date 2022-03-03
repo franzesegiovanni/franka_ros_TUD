@@ -139,7 +139,10 @@ void CartesianImpedanceExampleController::starting(const ros::Time& /*time*/) {
   //orientation_d_target_ = Eigen::Quaterniond(initial_transform.linear());
   // set nullspace equilibrium configuration to initial q 
   q_d_nullspace_ = q_initial;
-  force_torque_old.setZero(); 
+  force_torque_old.setZero();
+  dq_old=dq_initial;
+  ddq.setZero();
+  double time_old=ros::Time::now().toSec();
 }
 
 void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
@@ -147,6 +150,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   // get state variables
   franka::RobotState robot_state = state_handle_->getRobotState();
   std::array<double, 7> coriolis_array = model_handle_->getCoriolis();
+  std::array<double, 49> mass = model_handle_->getMass();
   std::array<double, 42> jacobian_array =
       model_handle_->getZeroJacobian(franka::Frame::kEndEffector); 
 
@@ -155,6 +159,10 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   Eigen::Map<Eigen::Matrix<double, 6, 7> > jacobian(jacobian_array.data());
   Eigen::Map<Eigen::Matrix<double, 7, 1> > q(robot_state.q.data());
   Eigen::Map<Eigen::Matrix<double, 7, 1> > dq(robot_state.dq.data());
+  double time_=ros::Time::now().toSec();
+  ddq=(dq-dq_old)/(time_-time_old);
+  dq_old=dq;
+  time_old=time_;
   Eigen::Map<Eigen::Matrix<double, 7, 1> > tau_J_d(  // NOLINT (readability-identifier-naming)
       robot_state.tau_J_d.data());
   Eigen::Map<Eigen::Matrix<double, 7, 1> > tau_ext(robot_state.tau_ext_hat_filtered.data());
@@ -184,7 +192,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   //g[4] = -gravity[4]+sin(q[1])*sin(q[2])*sin(q[4])*-7.556341752565437E-1-cos(q[1])*cos(q[4])*sin(q[3])*7.556341752565437E-1-cos(q[4])*sin(q[1])*sin(q[2])*9.810525836736536E-2+cos(q[1])*sin(q[3])*sin(q[4])*9.810525836736536E-2+cos(q[2])*cos(q[3])*cos(q[4])*sin(q[1])*7.556341752565437E-1-cos(q[1])*cos(q[4])*cos(q[6])*sin(q[3])*4.789098204946713E-3-cos(q[2])*cos(q[3])*sin(q[1])*sin(q[4])*9.810525836736536E-2+cos(q[4])*cos(q[5])*sin(q[1])*sin(q[2])*1.624775272283397-cos(q[1])*cos(q[5])*sin(q[3])*sin(q[4])*1.624775272283397+cos(q[1])*cos(q[4])*sin(q[3])*sin(q[6])*6.110287240797736E-2+cos(q[4])*sin(q[1])*sin(q[2])*sin(q[5])*6.640253492168912E-1-cos(q[1])*sin(q[3])*sin(q[4])*sin(q[5])*6.640253492168912E-1-cos(q[6])*sin(q[1])*sin(q[2])*sin(q[4])*4.789098204946713E-3+sin(q[1])*sin(q[2])*sin(q[4])*sin(q[6])*6.110287240797736E-2+cos(q[2])*cos(q[3])*cos(q[4])*cos(q[6])*sin(q[1])*4.789098204946713E-3+cos(q[2])*cos(q[3])*cos(q[5])*sin(q[1])*sin(q[4])*1.624775272283397-cos(q[2])*cos(q[3])*cos(q[4])*sin(q[1])*sin(q[6])*6.110287240797736E-2+cos(q[4])*cos(q[5])*cos(q[6])*sin(q[1])*sin(q[2])*6.110287240797736E-2-cos(q[1])*cos(q[5])*cos(q[6])*sin(q[3])*sin(q[4])*6.110287240797736E-2+cos(q[2])*cos(q[3])*sin(q[1])*sin(q[4])*sin(q[5])*6.640253492168912E-1+cos(q[4])*cos(q[5])*sin(q[1])*sin(q[2])*sin(q[6])*4.789098204946713E-3-cos(q[1])*cos(q[5])*sin(q[3])*sin(q[4])*sin(q[6])*4.789098204946713E-3+cos(q[2])*cos(q[3])*cos(q[5])*cos(q[6])*sin(q[1])*sin(q[4])*6.110287240797736E-2+cos(q[2])*cos(q[3])*cos(q[5])*sin(q[1])*sin(q[4])*sin(q[6])*4.789098204946713E-3;
   //g[5] = -gravity[5]+cos(q[1])*cos(q[3])*cos(q[5])*1.624775272283397+cos(q[1])*cos(q[3])*sin(q[5])*6.640253492168912E-1+cos(q[1])*cos(q[3])*cos(q[5])*cos(q[6])*6.110287240797736E-2+cos(q[1])*cos(q[4])*cos(q[5])*sin(q[3])*6.640253492168912E-1+cos(q[1])*cos(q[3])*cos(q[5])*sin(q[6])*4.789098204946713E-3+cos(q[2])*cos(q[5])*sin(q[1])*sin(q[3])*1.624775272283397-cos(q[1])*cos(q[4])*sin(q[3])*sin(q[5])*1.624775272283397+cos(q[2])*sin(q[1])*sin(q[3])*sin(q[5])*6.640253492168912E-1+cos(q[5])*sin(q[1])*sin(q[2])*sin(q[4])*6.640253492168912E-1-sin(q[1])*sin(q[2])*sin(q[4])*sin(q[5])*1.624775272283397-cos(q[2])*cos(q[3])*cos(q[4])*cos(q[5])*sin(q[1])*6.640253492168912E-1+cos(q[2])*cos(q[3])*cos(q[4])*sin(q[1])*sin(q[5])*1.624775272283397+cos(q[2])*cos(q[5])*cos(q[6])*sin(q[1])*sin(q[3])*6.110287240797736E-2-cos(q[1])*cos(q[4])*cos(q[6])*sin(q[3])*sin(q[5])*6.110287240797736E-2+cos(q[2])*cos(q[5])*sin(q[1])*sin(q[3])*sin(q[6])*4.789098204946713E-3-cos(q[1])*cos(q[4])*sin(q[3])*sin(q[5])*sin(q[6])*4.789098204946713E-3-cos(q[6])*sin(q[1])*sin(q[2])*sin(q[4])*sin(q[5])*6.110287240797736E-2-sin(q[1])*sin(q[2])*sin(q[4])*sin(q[5])*sin(q[6])*4.789098204946713E-3+cos(q[2])*cos(q[3])*cos(q[4])*cos(q[6])*sin(q[1])*sin(q[5])*6.110287240797736E-2+cos(q[2])*cos(q[3])*cos(q[4])*sin(q[1])*sin(q[5])*sin(q[6])*4.789098204946713E-3;
   //g[6] = -gravity[6]+cos(q[1])*cos(q[3])*cos(q[6])*sin(q[5])*4.789098204946713E-3-cos(q[4])*cos(q[6])*sin(q[1])*sin(q[2])*6.110287240797736E-2+cos(q[1])*cos(q[6])*sin(q[3])*sin(q[4])*6.110287240797736E-2-cos(q[1])*cos(q[3])*sin(q[5])*sin(q[6])*6.110287240797736E-2-cos(q[4])*sin(q[1])*sin(q[2])*sin(q[6])*4.789098204946713E-3+cos(q[1])*sin(q[3])*sin(q[4])*sin(q[6])*4.789098204946713E-3+cos(q[1])*cos(q[4])*cos(q[5])*cos(q[6])*sin(q[3])*4.789098204946713E-3-cos(q[2])*cos(q[3])*cos(q[6])*sin(q[1])*sin(q[4])*6.110287240797736E-2-cos(q[1])*cos(q[4])*cos(q[5])*sin(q[3])*sin(q[6])*6.110287240797736E-2-cos(q[2])*cos(q[3])*sin(q[1])*sin(q[4])*sin(q[6])*4.789098204946713E-3+cos(q[2])*cos(q[6])*sin(q[1])*sin(q[3])*sin(q[5])*4.789098204946713E-3+cos(q[5])*cos(q[6])*sin(q[1])*sin(q[2])*sin(q[4])*4.789098204946713E-3-cos(q[2])*sin(q[1])*sin(q[3])*sin(q[5])*sin(q[6])*6.110287240797736E-2-cos(q[5])*sin(q[1])*sin(q[2])*sin(q[4])*sin(q[6])*6.110287240797736E-2-cos(q[2])*cos(q[3])*cos(q[4])*cos(q[5])*cos(q[6])*sin(q[1])*4.789098204946713E-3+cos(q[2])*cos(q[3])*cos(q[4])*cos(q[5])*sin(q[1])*sin(q[6])*6.110287240797736E-2;
-  force_torque=force_torque-jacobian_transpose_pinv*(tau_ext-tau_f);
+  force_torque=force_torque-jacobian_transpose_pinv*(tau_ext-tau_f-mass*ddq);
   //force_torque=-jacobian_transpose_pinv*(tau_ext-tau_f-g);
   //force_torque=force_torque+jacobian_transpose_pinv*tau_f;
   // publish force, torque
