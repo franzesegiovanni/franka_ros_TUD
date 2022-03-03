@@ -87,15 +87,6 @@ target_include_directories(franka_example_controllers PUBLIC
 )
 
 
-add_executable(read_position
-  src/read_position.cpp
-)
-
-target_link_libraries(read_position
-   ${catkin_LIBRARIES}
-   franka_example_controllers
-)
-
 add_executable(read_position_bimanual
   src/read_position_bimanual.cpp
 )
