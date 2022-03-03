@@ -140,8 +140,6 @@ void CartesianImpedanceExampleController::starting(const ros::Time& /*time*/) {
   // set nullspace equilibrium configuration to initial q 
   q_d_nullspace_ = q_initial;
   force_torque_old.setZero();
-  dq_old=dq_initial;
-  ddq.setZero();
   double time_old=ros::Time::now().toSec();
 }
 
@@ -200,7 +198,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
     pub_force_torque_.publish(force_torque_msg);
     force_torque_old=force_torque/(filter_step_);
     force_torque.setZero();
-    ddq.setZero();
+    //ddq.setZero();
     filter_step=0;
     }
   

@@ -59,15 +59,15 @@ int main(int argc, char **argv)
 
 
   ros::NodeHandle node_position;
-  ros::Rate loop_rate(100);
+  ros::Rate loop_rate(1000);
 
-  ros::Subscriber sub_right = node_position.subscribe("/panda_dual/panda_1_state_controller/franka_states", 1000, Read_Position_right_Callback);
+  ros::Subscriber sub_right = node_position.subscribe("/panda_dual/panda_1_state_controller/franka_states", 1, Read_Position_right_Callback);
 
- ros::Subscriber sub_left = node_position.subscribe("/panda_dual/panda_2_state_controller/franka_states", 1000, Read_Position_left_Callback);
+ ros::Subscriber sub_left = node_position.subscribe("/panda_dual/panda_2_state_controller/franka_states", 1, Read_Position_left_Callback);
 
-  ros::Publisher pub_right = node_position.advertise<geometry_msgs::PoseStamped>("/cartesian_pose_left", 1000);
+  ros::Publisher pub_right = node_position.advertise<geometry_msgs::PoseStamped>("/cartesian_pose_left", 1);
 
-  ros::Publisher pub_left = node_position.advertise<geometry_msgs::PoseStamped>("/cartesian_pose_right", 1000);
+  ros::Publisher pub_left = node_position.advertise<geometry_msgs::PoseStamped>("/cartesian_pose_right", 1);
 
    geometry_msgs::PoseStamped msg_right;
    geometry_msgs::PoseStamped msg_left;

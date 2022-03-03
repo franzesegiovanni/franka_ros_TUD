@@ -476,24 +476,36 @@ void DualArmCartesianImpedanceExampleController::complianceParamCallback(
 void DualArmCartesianImpedanceExampleController::equilibriumPoseCallback_right(
     const geometry_msgs::PoseStampedConstPtr& msg) {
   auto& right_arm_data = arms_data_.at(right_arm_id_);
+  auto& left_arm_data = arms_data_.at(left_arm_id_);
   right_arm_data.position_d_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
   Eigen::Quaterniond last_orientation_d_(right_arm_data.orientation_d_);
   right_arm_data.orientation_d_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
       msg->pose.orientation.z, msg->pose.orientation.w;
   if (last_orientation_d_.coeffs().dot(right_arm_data.orientation_d_.coeffs()) < 0.0) {
     right_arm_data.orientation_d_.coeffs() << -right_arm_data.orientation_d_.coeffs();  
+  //read position of the other arm and save it in the other arm position
+  franka::RobotState robot_state = left_arm_data.state_handle_->getRobotState();
+  Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
+  Eigen::Vector3d position_left(transform.translation());
+  right_arm_data.position_other_arm_=position_left;
+
 }
 }
 
 void DualArmCartesianImpedanceExampleController::equilibriumPoseCallback_left(
     const geometry_msgs::PoseStampedConstPtr& msg) {
+  auto& right_arm_data = arms_data_.at(right_arm_id_);
   auto& left_arm_data = arms_data_.at(left_arm_id_);
   left_arm_data.position_d_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
   Eigen::Quaterniond last_orientation_d_(left_arm_data.orientation_d_);
   left_arm_data.orientation_d_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
       msg->pose.orientation.z, msg->pose.orientation.w;
   if (last_orientation_d_.coeffs().dot(left_arm_data.orientation_d_.coeffs()) < 0.0) {
-    left_arm_data.orientation_d_.coeffs() << -left_arm_data.orientation_d_.coeffs();  
+    left_arm_data.orientation_d_.coeffs() << -left_arm_data.orientation_d_.coeffs();
+  franka::RobotState robot_state = right_arm_data.state_handle_->getRobotState();
+  Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
+  Eigen::Vector3d position_right(transform.translation());
+  right_arm_data.position_other_arm_=position_right;  
 }
 }
 

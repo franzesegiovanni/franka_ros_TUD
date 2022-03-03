@@ -51,6 +51,7 @@ struct FrankaDataContainer {
   Eigen::Vector3d position_d_;               ///< Target position of the end effector.
   Eigen::Quaterniond orientation_d_;         ///< Target orientation of the end effector.
 
+  Eigen::Vector3d position_other_arm_;               ///< Target position of the end effector.
 
 };
 
