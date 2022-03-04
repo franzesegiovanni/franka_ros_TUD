@@ -270,7 +270,18 @@ void DualArmCartesianImpedanceExampleController::updateArm(FrankaDataContainer& 
   // position error
   Eigen::Matrix<double, 6, 1> error;
   error.head(3) << position - arm_data.position_d_;
-
+  
+  Eigen::Matrix<double, 6, 1> error_relative;
+  error_relative.head(3) << position - arm_data. position_other_arm_;
+  error_relative.tail(3).setZero();
+  if (error_relative(0) > 0) {error_relative(0)=error_relative(0)-arm_data.position_d_relative_(0);}
+  else {error_relative(0)=error_relative(0)+arm_data.position_d_relative_(0);}
+  
+  if (error_relative(1) > 0) {error_relative(1)=error_relative(1)-arm_data.position_d_relative_(1);}
+  else {error_relative(1)=error_relative(1)+arm_data.position_d_relative_(1);}
+  
+  if (error_relative(2) > 0) {error_relative(2)=error_relative(2)-arm_data.position_d_relative_(2);}
+  else {error_relative(2)=error_relative(2)+arm_data.position_d_relative_(2);}
   // orientation error
   if (arm_data.orientation_d_.coeffs().dot(orientation.coeffs()) < 0.0) {
     orientation.coeffs() << -orientation.coeffs();
@@ -284,7 +295,7 @@ void DualArmCartesianImpedanceExampleController::updateArm(FrankaDataContainer& 
 
   // compute control
   // allocate variables
-  Eigen::VectorXd tau_task(7), tau_nullspace(7), tau_d(7), tau_joint_limit(7), null_space_error(7);
+  Eigen::VectorXd tau_task(7), tau_nullspace(7), tau_d(7), tau_joint_limit(7), null_space_error(7), tau_relative(7);
 
   // pseudoinverse for nullspace handling
   // kinematic pseuoinverse
@@ -323,6 +334,8 @@ void DualArmCartesianImpedanceExampleController::updateArm(FrankaDataContainer& 
   if (q(5)<-0.1)     { tau_joint_limit(5)=+5; }
   if (q(6)>2.8)      { tau_joint_limit(6)=-5; }
   if (q(6)<-2.8)     { tau_joint_limit(6)=+5; }
+
+  tau_relative << jacobian.transpose() * (-arm_data.cartesian_stiffness_relative_ * error_relative);
   // Desired torque
   tau_d << tau_task + tau_nullspace + coriolis+tau_joint_limit;
   // Saturate torque rate to avoid discontinuities
@@ -375,6 +388,13 @@ void DualArmCartesianImpedanceExampleController::equilibriumStiffnessCallback(
 
   left_arm_data.nullspace_stiffness_= std::max(std::min(stiff_[2], float(20.0)), float(0.0));
 
+  left_arm_data.cartesian_stiffness_relative_(0,0)= std::max(std::min(stiff_[6], float(1000.0)), float(0.0));
+  left_arm_data.cartesian_stiffness_relative_(1,1)= std::max(std::min(stiff_[6], float(1000.0)), float(0.0));
+  left_arm_data.cartesian_stiffness_relative_(2,2)= std::max(std::min(stiff_[6], float(1000.0)), float(0.0));
+  left_arm_data.cartesian_stiffness_relative_(3,3)= std::max(std::min(float(0.0), float(1000.0)), float(0.0));
+  left_arm_data.cartesian_stiffness_relative_(4,4)= std::max(std::min(float(0.0), float(1000.0)), float(0.0));
+  left_arm_data.cartesian_stiffness_relative_(5,5)= std::max(std::min(float(0.0), float(1000.0)), float(0.0));
+
   auto& right_arm_data = arms_data_.at(right_arm_id_);
   right_arm_data.cartesian_stiffness_(0,0)=std::max(std::min(stiff_[3], float(1000.0)), float(0.0));
   right_arm_data.cartesian_stiffness_(1,1)=std::max(std::min(stiff_[3], float(1000.0)), float(0.0));
@@ -393,6 +413,14 @@ void DualArmCartesianImpedanceExampleController::equilibriumStiffnessCallback(
   right_arm_data.cartesian_damping_(5,5)=2.0 * sqrt(right_arm_data.cartesian_stiffness_(5,5)); 
 
   right_arm_data.nullspace_stiffness_= std::max(std::min(stiff_[5], float(20.0)), float(0.0));
+   
+  right_arm_data.cartesian_stiffness_relative_(0,0)= std::max(std::min(stiff_[6], float(1000.0)), float(0.0));
+  right_arm_data.cartesian_stiffness_relative_(1,1)= std::max(std::min(stiff_[6], float(1000.0)), float(0.0));
+  right_arm_data.cartesian_stiffness_relative_(2,2)= std::max(std::min(stiff_[6], float(1000.0)), float(0.0));
+  right_arm_data.cartesian_stiffness_relative_(3,3)= std::max(std::min(float(0.0), float(1000.0)), float(0.0));
+  right_arm_data.cartesian_stiffness_relative_(4,4)= std::max(std::min(float(0.0), float(1000.0)), float(0.0));
+  right_arm_data.cartesian_stiffness_relative_(5,5)= std::max(std::min(float(0.0), float(1000.0)), float(0.0));
+
 
   dynamic_reconfigure::Config set_K_TL;
   dynamic_reconfigure::DoubleParameter param_TL_double;
@@ -436,6 +464,13 @@ void DualArmCartesianImpedanceExampleController::equilibriumStiffnessCallback(
   param_NSR_double.value = stiff_[5];
   set_K_NSR.doubles = {param_NSR_double};
   pub_stiff_update_.publish(set_K_NSR);
+
+  dynamic_reconfigure::Config set_K_REL;
+  dynamic_reconfigure::DoubleParameter param_REL_double;
+  param_NSR_double.name = "coupling_translational_stiffness";
+  param_NSR_double.value = stiff_[6];
+  set_K_NSR.doubles = {param_REL_double};
+  pub_stiff_update_.publish(set_K_REL);
 
 }
 
@@ -509,6 +544,25 @@ void DualArmCartesianImpedanceExampleController::equilibriumPoseCallback_left(
 }
 }
 
+void DualArmCartesianImpedanceExampleController::equilibriumPoseCallback_relative(
+    const geometry_msgs::PoseStampedConstPtr& msg) {
+  auto& right_arm_data = arms_data_.at(right_arm_id_);
+  auto&  left_arm_data = arms_data_.at(left_arm_id_);
+  left_arm_data.position_d_relative_  << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
+  right_arm_data.position_d_relative_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
+  
+  //Eigen::Quaterniond last_orientation_d_(left_arm_data.orientation_d_relative_);
+  //left_arm_data.orientation_d_relative_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
+  //    msg->pose.orientation.z, msg->pose.orientation.w;
+  //if (last_orientation_d_.coeffs().dot(left_arm_data.orientation_d_relative_.coeffs()) < 0.0) {
+  //  left_arm_data.orientation_d_relative_.coeffs() << -left_arm_data.orientation_d_relative_.coeffs();
+  
+  //Eigen::Quaterniond last_orientation_d_(right_arm_data.orientation_d_relative_);
+  //right_arm_data.orientation_d_relative_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
+  //    msg->pose.orientation.z, msg->pose.orientation.w;
+  //if (last_orientation_d_.coeffs().dot(right_arm_data.orientation_d_relative_.coeffs()) < 0.0) {
+  //  right_arm_data.orientation_d_relative_.coeffs() << -right_arm_data.orientation_d_relative_.coeffs();    
+}
 
 void DualArmCartesianImpedanceExampleController::equilibriumConfigurationCallback_right(const sensor_msgs::JointState::ConstPtr& joint) {
 
