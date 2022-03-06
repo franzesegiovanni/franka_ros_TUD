@@ -15,13 +15,16 @@ All packages of `franka_ros` are licensed under the [Apache 2.0 license][apache-
 [travis]: https://travis-ci.org/frankaemika/franka_ros
 
 This repository does only contain the impedance controller that is used in the CoR lab of TU Delft. 
-This impedance control allows to control the stiffness with a node in real time without using a server in the three different cartesian directions, rotations and null-space control. It also allow to have as input a desired configuriation control for doing null-space control. The reading of the end-effector position is already avaialable in the in the topic and no special type of message is necessary. The update of the reading is the same of the robot control, i.e. 1 KHz. 
+This impedance control allows to control the stiffness with a node in real time without using a server in the three different cartesian directions, rotations and null-space control. It also allow to have as input a desired configuriation control for doing null-space control. The reading of the end-effector position is already avaialable in the topics and no special type of message is necessary. The update of the reading is the same of the robot control, i.e. 1 KHz. 
 
 This repository has been used in different article, for example [ILoSaA: Interactive Learning of Stiffness and Attractors](https://arxiv.org/abs/2103.03099)
 
+If you find this repository useful for your research, please consider to cite the paper mentioned above. 
+
 For more informations or info please send an email to Giovanni  at g.franzese@tudelft.nl
 
-The author of the repository wil not take any responsability in case of undesired behaviour of the repository. Please refer to the original one in case you were not directly asked to use this repository.
+The author of the repository wil not take any responsability in case of undesired behaviour of the manipulator. 
+Please refer to the original one in case you do not need advanced applications of impedance control.
 
 
 ## How to install the controller
