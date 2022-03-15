@@ -1,9 +1,20 @@
-# ROS integration for Franka Emika research robots
+# Simulation of the controllers of TU Delft in Gazebo
 
-[![CI](https://github.com/frankaemika/franka_ros/actions/workflows/ci.yml/badge.svg)](https://github.com/frankaemika/franka_ros/actions/workflows/ci.yml)
+How to start the simulation of the cartesian impedance control
+
+
+roslaunch franka_gazebo panda.launch x:=-0.5     world:=$(rospack find franka_gazebo)/world/test2     controller:=cartesian_impedance_example_controller     rviz:=true
+
+
+
+
+
 
 
 See the [Franka Control Interface (FCI) documentation][fci-docs] for more information.
+
+
+
 
 ## License
 
