@@ -9,13 +9,14 @@
 #include <controller_interface/multi_interface_controller.h>
 #include <dynamic_reconfigure/server.h>
 #include <geometry_msgs/PoseStamped.h>
+#include "std_msgs/Float32MultiArray.h"
 #include <hardware_interface/joint_command_interface.h>
 #include <hardware_interface/robot_hw.h>
 #include <realtime_tools/realtime_publisher.h>
 #include <ros/node_handle.h>
 #include <ros/time.h>
 #include <Eigen/Dense>
-
+#include "sensor_msgs/JointState.h"
 #include <franka_example_controllers/dual_arm_compliance_paramConfig.h>
 #include <franka_hw/franka_model_interface.h>
 #include <franka_hw/franka_state_interface.h>
@@ -33,26 +34,24 @@ struct FrankaDataContainer {
   std::unique_ptr<franka_hw::FrankaModelHandle>
       model_handle_;  ///< To have access to e.g. jacobians.
   std::vector<hardware_interface::JointHandle> joint_handles_;  ///< To command joint torques.
-  double filter_params_{0.005};       ///< [-] PT1-Filter constant to smooth target values set
-                                      ///< by dynamic reconfigure servers (stiffness/damping)
-                                      ///< or interactive markers for the target poses.
+
   double nullspace_stiffness_{20.0};  ///< [Nm/rad] To track the initial joint configuration in
                                       ///< the nullspace of the Cartesian motion.
-  double nullspace_stiffness_target_{20.0};  ///< [Nm/rad] Unfiltered raw value.
+
   const double delta_tau_max_{1.0};          ///< [Nm/ms] Maximum difference in joint-torque per
                                              ///< timestep. Used to saturated torque rates to ensure
                                              ///< feasible commands.
   Eigen::Matrix<double, 6, 6> cartesian_stiffness_;         ///< To track the target pose.
-  Eigen::Matrix<double, 6, 6> cartesian_stiffness_target_;  ///< Unfiltered raw value.
+
   Eigen::Matrix<double, 6, 6> cartesian_damping_;           ///< To damp cartesian motions.
-  Eigen::Matrix<double, 6, 6> cartesian_damping_target_;    ///< Unfiltered raw value.
+
   Eigen::Matrix<double, 7, 1> q_d_nullspace_;               ///< Target joint pose for nullspace
                                                             ///< motion. For now we track the
                                                             ///< initial joint pose.
   Eigen::Vector3d position_d_;               ///< Target position of the end effector.
   Eigen::Quaterniond orientation_d_;         ///< Target orientation of the end effector.
-  Eigen::Vector3d position_d_target_;        ///< Unfiltered raw value.
-  Eigen::Quaterniond orientation_d_target_;  ///< Unfiltered raw value.
+
+
 };
 
 /**
@@ -106,7 +105,7 @@ class DualArmCartesianImpedanceExampleController
   realtime_tools::RealtimePublisher<geometry_msgs::PoseStamped> center_frame_pub_;
   ///< Rate to trigger publishing the current pose of the centering frame.
   franka_hw::TriggerRate publish_rate_;
-
+  Eigen::Matrix<float, 7, 1> stiff_;
   /**
    * Saturates torque commands to ensure feasibility.
    *
@@ -164,19 +163,17 @@ class DualArmCartesianImpedanceExampleController
       uint32_t /*level*/);
 
   ///< Target pose subscriber
-  ros::Subscriber sub_target_pose_left_;
-
-  /**
-   * Callback method that handles updates of the target poses.
-   *
-   * @param[in] msg New target pose.
-   */
-  void targetPoseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
-
-  /**
-   * Publishes a Pose Stamped for visualization of the current centering pose.
-   */
-  void publishCenteringPose();
+  ros::Subscriber sub_equilibrium_pose_right_;
+  void equilibriumPoseCallback_right(const geometry_msgs::PoseStampedConstPtr& msg);
+  ros::Subscriber sub_equilibrium_pose_left_;
+  void equilibriumPoseCallback_left(const geometry_msgs::PoseStampedConstPtr& msg);
+  ros::Subscriber sub_stiffness_;
+  void equilibriumStiffnessCallback(const std_msgs::Float32MultiArray::ConstPtr& stiffness_);
+  ros::Subscriber sub_nullspace_right_;
+  void equilibriumConfigurationCallback_right(const sensor_msgs::JointState::ConstPtr& joint);
+  ros::Subscriber sub_nullspace_left_;
+  void equilibriumConfigurationCallback_left(const  sensor_msgs::JointState::ConstPtr&  joint);
+  ros::Publisher pub_stiff_update_;
 };
 
 }  // namespace franka_example_controllers
