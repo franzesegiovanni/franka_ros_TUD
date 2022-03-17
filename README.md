@@ -111,3 +111,5 @@ Remember that the order of variables are x,y,z,rx,ry,rz.
     }
   }
   
+  ## How to start the bimanual set-up
+  roslaunch franka_example_controllers dual_arm_cartesian_impedance_example_controller.launch robot_ips:={panda_1/robot_ip:172.16.0.2,panda_2/robot_ip:172.16.0.3}
