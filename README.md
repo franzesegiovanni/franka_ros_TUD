@@ -17,7 +17,7 @@ All packages of `franka_ros` are licensed under the [Apache 2.0 license][apache-
 This repository does only contain the impedance controller that is used in the CoR lab of TU Delft. 
 This impedance control allows to control the stiffness with a node in real time without using a server in the three different cartesian directions, rotations and null-space control. It also allow to have as input a desired configuriation control for doing null-space control. The reading of the end-effector position is already avaialable in the topics and no special type of message is necessary. The update of the reading is the same of the robot control, i.e. 1 KHz. 
 
-This repository has been used in different article, for example [ILoSaA: Interactive Learning of Stiffness and Attractors](https://arxiv.org/abs/2103.03099)
+This repository has been used in different article, for example [ILoSA: Interactive Learning of Stiffness and Attractors](https://arxiv.org/abs/2103.03099)
 
 If you find this repository useful for your research, please consider to cite the paper mentioned above. 
 
@@ -111,3 +111,5 @@ Remember that the order of variables are x,y,z,rx,ry,rz.
     }
   }
   
+  ## How to start the bimanual set-up
+  roslaunch franka_example_controllers dual_arm_cartesian_impedance_example_controller.launch robot_ips:={panda_1/robot_ip:172.16.0.2,panda_2/robot_ip:172.16.0.3}
