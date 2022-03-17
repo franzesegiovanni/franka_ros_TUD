@@ -137,7 +137,7 @@ bool DualArmCartesianImpedanceExampleController::init(hardware_interface::RobotH
   //subscribe_options.transport_hints = ros::TransportHints().reliable().tcpNoDelay();
   //sub_target_pose_left_ = node_handle.subscribe(subscribe_options);
   sub_equilibrium_pose_right_ = node_handle.subscribe(
-      "/equilibrium_pose_right", 20, &DualArmCartesianImpedanceExampleController::equilibriumPoseCallback_right, this,      	      
+      "/equilibrium_pose_right", 20, &DualArmCartesianImpedanceExampleController::equilibriumPoseCallback_right, this,
       ros::TransportHints().reliable().tcpNoDelay());
   sub_equilibrium_pose_left_ = node_handle.subscribe(
       "/equilibrium_pose_left", 20, &DualArmCartesianImpedanceExampleController::equilibriumPoseCallback_left, this,
@@ -155,10 +155,16 @@ bool DualArmCartesianImpedanceExampleController::init(hardware_interface::RobotH
     "/nullspace_left_", 20, &DualArmCartesianImpedanceExampleController::equilibriumConfigurationCallback_left, this,
     ros::TransportHints().reliable().tcpNoDelay());
 
+  sub_equilibrium_distance_ = node_handle.subscribe(
+        "/equilibrium_distance", 20, &DualArmCartesianImpedanceExampleController::equilibriumPoseCallback_relative, this,
+        ros::TransportHints().reliable().tcpNoDelay());
 
    pub_stiff_update_ = node_handle.advertise<dynamic_reconfigure::Config>(
     "/dynamic_reconfigure_compliance_param_node/parameter_updates", 5);
 
+    sub_share_info_= node_handle.subscribe(
+          "/panda_dual/panda_1_state_controller/joint_states", 1, &DualArmCartesianImpedanceExampleController::ShareInformationPosition, this,
+          ros::TransportHints().reliable().tcpNoDelay());
 
   dynamic_reconfigure_compliance_param_node_ =
       ros::NodeHandle("dynamic_reconfigure_compliance_param_node");
@@ -270,18 +276,19 @@ void DualArmCartesianImpedanceExampleController::updateArm(FrankaDataContainer& 
   // position error
   Eigen::Matrix<double, 6, 1> error;
   error.head(3) << position - arm_data.position_d_;
-  
+
   Eigen::Matrix<double, 6, 1> error_relative;
-  error_relative.head(3) << position - arm_data. position_other_arm_;
+  error_relative.head(3) << position - arm_data.position_other_arm_;
   error_relative.tail(3).setZero();
   if (error_relative(0) > 0) {error_relative(0)=error_relative(0)-arm_data.position_d_relative_(0);}
   else {error_relative(0)=error_relative(0)+arm_data.position_d_relative_(0);}
-  
+
   if (error_relative(1) > 0) {error_relative(1)=error_relative(1)-arm_data.position_d_relative_(1);}
   else {error_relative(1)=error_relative(1)+arm_data.position_d_relative_(1);}
-  
+
   if (error_relative(2) > 0) {error_relative(2)=error_relative(2)-arm_data.position_d_relative_(2);}
   else {error_relative(2)=error_relative(2)+arm_data.position_d_relative_(2);}
+
   // orientation error
   if (arm_data.orientation_d_.coeffs().dot(orientation.coeffs()) < 0.0) {
     orientation.coeffs() << -orientation.coeffs();
@@ -317,10 +324,10 @@ void DualArmCartesianImpedanceExampleController::updateArm(FrankaDataContainer& 
                     jacobian.transpose() * jacobian_transpose_pinv) *
                        (arm_data.nullspace_stiffness_ * null_space_error -
                         (2.0 * sqrt(arm_data.nullspace_stiffness_)) * dq);
-  
+
   //Avoid joint limits
-  tau_joint_limit.setZero(); 
-  if (q(0)>2.85)     { tau_joint_limit(0)=-5; } 
+  tau_joint_limit.setZero();
+  if (q(0)>2.85)     { tau_joint_limit(0)=-5; }
   if (q(0)<-2.85)    { tau_joint_limit(0)=+5; }
   if (q(1)>1.7)      { tau_joint_limit(1)=-5; }
   if (q(1)<-1.7)     { tau_joint_limit(1)=+5; }
@@ -330,14 +337,15 @@ void DualArmCartesianImpedanceExampleController::updateArm(FrankaDataContainer& 
   if (q(3)<-3.0)     { tau_joint_limit(3)=+5; }
   if (q(4)>2.85)     { tau_joint_limit(4)=-5; }
   if (q(4)<-2.85)    { tau_joint_limit(4)=+5; }
-  if (q(5)>3.7)      { tau_joint_limit(5)=-5; }  
+  if (q(5)>3.7)      { tau_joint_limit(5)=-5; }
   if (q(5)<-0.1)     { tau_joint_limit(5)=+5; }
   if (q(6)>2.8)      { tau_joint_limit(6)=-5; }
   if (q(6)<-2.8)     { tau_joint_limit(6)=+5; }
 
-  tau_relative << jacobian.transpose() * (-arm_data.cartesian_stiffness_relative_ * error_relative);
+  tau_relative << jacobian.transpose() * (-arm_data.cartesian_stiffness_relative_ * error_relative-
+                                      arm_data.cartesian_damping_relative_ * (jacobian * dq));
   // Desired torque
-  tau_d << tau_task + tau_nullspace + coriolis+tau_joint_limit;
+  tau_d << tau_task + tau_nullspace + coriolis+tau_joint_limit+tau_relative;
   // Saturate torque rate to avoid discontinuities
   tau_d << saturateTorqueRate(arm_data, tau_d, tau_J_d);
   for (size_t i = 0; i < 7; ++i) {
@@ -384,7 +392,7 @@ void DualArmCartesianImpedanceExampleController::equilibriumStiffnessCallback(
 
   left_arm_data.cartesian_damping_(3,3)=2.0 * sqrt(left_arm_data.cartesian_stiffness_(3,3));
   left_arm_data.cartesian_damping_(4,4)=2.0 * sqrt(left_arm_data.cartesian_stiffness_(4,4));
-  left_arm_data.cartesian_damping_(5,5)=2.0 * sqrt(left_arm_data.cartesian_stiffness_(5,5)); 
+  left_arm_data.cartesian_damping_(5,5)=2.0 * sqrt(left_arm_data.cartesian_stiffness_(5,5));
 
   left_arm_data.nullspace_stiffness_= std::max(std::min(stiff_[2], float(20.0)), float(0.0));
 
@@ -410,10 +418,10 @@ void DualArmCartesianImpedanceExampleController::equilibriumStiffnessCallback(
 
   right_arm_data.cartesian_damping_(3,3)=2.0 * sqrt(right_arm_data.cartesian_stiffness_(3,3));
   right_arm_data.cartesian_damping_(4,4)=2.0 * sqrt(right_arm_data.cartesian_stiffness_(4,4));
-  right_arm_data.cartesian_damping_(5,5)=2.0 * sqrt(right_arm_data.cartesian_stiffness_(5,5)); 
+  right_arm_data.cartesian_damping_(5,5)=2.0 * sqrt(right_arm_data.cartesian_stiffness_(5,5));
 
   right_arm_data.nullspace_stiffness_= std::max(std::min(stiff_[5], float(20.0)), float(0.0));
-   
+
   right_arm_data.cartesian_stiffness_relative_(0,0)= std::max(std::min(stiff_[6], float(1000.0)), float(0.0));
   right_arm_data.cartesian_stiffness_relative_(1,1)= std::max(std::min(stiff_[6], float(1000.0)), float(0.0));
   right_arm_data.cartesian_stiffness_relative_(2,2)= std::max(std::min(stiff_[6], float(1000.0)), float(0.0));
@@ -493,6 +501,18 @@ void DualArmCartesianImpedanceExampleController::complianceParamCallback(
       << 2 * sqrt(config.left_rotational_stiffness) * Eigen::Matrix3d::Identity();
   left_arm_data.nullspace_stiffness_ = config.left_nullspace_stiffness;
 
+  left_arm_data.cartesian_stiffness_relative_.setIdentity();
+  left_arm_data.cartesian_stiffness_relative_.topLeftCorner(3, 3)
+      << config.coupling_translational_stiffness * Eigen::Matrix3d::Identity();
+  left_arm_data.cartesian_stiffness_relative_.bottomRightCorner(3, 3)
+      << 0.0 * Eigen::Matrix3d::Identity();
+
+  left_arm_data.cartesian_damping_relative_.setIdentity();
+  left_arm_data.cartesian_damping_relative_.topLeftCorner(3, 3)
+      << 2* sqrt(config.coupling_translational_stiffness) * Eigen::Matrix3d::Identity();
+  left_arm_data.cartesian_stiffness_relative_.bottomRightCorner(3, 3)
+          << 0.0 * Eigen::Matrix3d::Identity();
+
   auto& right_arm_data = arms_data_.at(right_arm_id_);
   right_arm_data.cartesian_stiffness_.setIdentity();
   right_arm_data.cartesian_stiffness_.topLeftCorner(3, 3)
@@ -506,6 +526,18 @@ void DualArmCartesianImpedanceExampleController::complianceParamCallback(
   right_arm_data.cartesian_damping_.bottomRightCorner(3, 3)
       << 2 * sqrt(config.right_rotational_stiffness) * Eigen::Matrix3d::Identity();
   right_arm_data.nullspace_stiffness_ = config.right_nullspace_stiffness;
+
+  right_arm_data.cartesian_stiffness_relative_.setIdentity();
+  right_arm_data.cartesian_stiffness_relative_.topLeftCorner(3, 3)
+      << config.coupling_translational_stiffness * Eigen::Matrix3d::Identity();
+  right_arm_data.cartesian_stiffness_relative_.bottomRightCorner(3, 3)
+      << 0.0 * Eigen::Matrix3d::Identity();
+
+  right_arm_data.cartesian_damping_relative_.setIdentity();
+  right_arm_data.cartesian_damping_relative_.topLeftCorner(3, 3)
+      << 2* sqrt(config.coupling_translational_stiffness) * Eigen::Matrix3d::Identity();
+  right_arm_data.cartesian_stiffness_relative_.bottomRightCorner(3, 3)
+          << 0.0 * Eigen::Matrix3d::Identity();
 }
 
 void DualArmCartesianImpedanceExampleController::equilibriumPoseCallback_right(
@@ -517,12 +549,12 @@ void DualArmCartesianImpedanceExampleController::equilibriumPoseCallback_right(
   right_arm_data.orientation_d_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
       msg->pose.orientation.z, msg->pose.orientation.w;
   if (last_orientation_d_.coeffs().dot(right_arm_data.orientation_d_.coeffs()) < 0.0) {
-    right_arm_data.orientation_d_.coeffs() << -right_arm_data.orientation_d_.coeffs();  
+    right_arm_data.orientation_d_.coeffs() << -right_arm_data.orientation_d_.coeffs();
   //read position of the other arm and save it in the other arm position
-  franka::RobotState robot_state = left_arm_data.state_handle_->getRobotState();
-  Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
-  Eigen::Vector3d position_left(transform.translation());
-  right_arm_data.position_other_arm_=position_left;
+  // franka::RobotState robot_state = left_arm_data.state_handle_->getRobotState();
+  // Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
+  // Eigen::Vector3d position_left(transform.translation());
+  // right_arm_data.position_other_arm_=position_left;
 
 }
 }
@@ -537,11 +569,25 @@ void DualArmCartesianImpedanceExampleController::equilibriumPoseCallback_left(
       msg->pose.orientation.z, msg->pose.orientation.w;
   if (last_orientation_d_.coeffs().dot(left_arm_data.orientation_d_.coeffs()) < 0.0) {
     left_arm_data.orientation_d_.coeffs() << -left_arm_data.orientation_d_.coeffs();
-  franka::RobotState robot_state = right_arm_data.state_handle_->getRobotState();
-  Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
-  Eigen::Vector3d position_right(transform.translation());
-  right_arm_data.position_other_arm_=position_right;  
+  // franka::RobotState robot_state = right_arm_data.state_handle_->getRobotState();
+  // Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
+  // Eigen::Vector3d position_right(transform.translation());
+  // left_arm_data.position_other_arm_=position_right;
 }
+}
+
+void DualArmCartesianImpedanceExampleController::ShareInformationPosition(const sensor_msgs::JointState& msg){
+  auto& right_arm_data = arms_data_.at(right_arm_id_);
+  auto& left_arm_data = arms_data_.at(left_arm_id_);
+  franka::RobotState robot_state_right = right_arm_data.state_handle_->getRobotState();
+  Eigen::Affine3d transform_right(Eigen::Matrix4d::Map(robot_state_right.O_T_EE.data()));
+  Eigen::Vector3d position_right(transform_right.translation());
+  left_arm_data.position_other_arm_=position_right;
+  franka::RobotState robot_state_left = left_arm_data.state_handle_->getRobotState();
+  Eigen::Affine3d transform_left(Eigen::Matrix4d::Map(robot_state_left.O_T_EE.data()));
+  Eigen::Vector3d position_left(transform_left.translation());
+  right_arm_data.position_other_arm_=position_left;
+
 }
 
 void DualArmCartesianImpedanceExampleController::equilibriumPoseCallback_relative(
@@ -550,25 +596,25 @@ void DualArmCartesianImpedanceExampleController::equilibriumPoseCallback_relativ
   auto&  left_arm_data = arms_data_.at(left_arm_id_);
   left_arm_data.position_d_relative_  << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
   right_arm_data.position_d_relative_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
-  
+
   //Eigen::Quaterniond last_orientation_d_(left_arm_data.orientation_d_relative_);
   //left_arm_data.orientation_d_relative_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
   //    msg->pose.orientation.z, msg->pose.orientation.w;
   //if (last_orientation_d_.coeffs().dot(left_arm_data.orientation_d_relative_.coeffs()) < 0.0) {
   //  left_arm_data.orientation_d_relative_.coeffs() << -left_arm_data.orientation_d_relative_.coeffs();
-  
+
   //Eigen::Quaterniond last_orientation_d_(right_arm_data.orientation_d_relative_);
   //right_arm_data.orientation_d_relative_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
   //    msg->pose.orientation.z, msg->pose.orientation.w;
   //if (last_orientation_d_.coeffs().dot(right_arm_data.orientation_d_relative_.coeffs()) < 0.0) {
-  //  right_arm_data.orientation_d_relative_.coeffs() << -right_arm_data.orientation_d_relative_.coeffs();    
+  //  right_arm_data.orientation_d_relative_.coeffs() << -right_arm_data.orientation_d_relative_.coeffs();
 }
 
 void DualArmCartesianImpedanceExampleController::equilibriumConfigurationCallback_right(const sensor_msgs::JointState::ConstPtr& joint) {
 
-  auto& right_arm_data = arms_data_.at(right_arm_id_); 
+  auto& right_arm_data = arms_data_.at(right_arm_id_);
   std::vector<double> read_joint_right;
-  read_joint_right= joint -> position;	
+  read_joint_right= joint -> position;
   right_arm_data.q_d_nullspace_(0) = read_joint_right[0];
   right_arm_data.q_d_nullspace_(1) = read_joint_right[1];
   right_arm_data.q_d_nullspace_(2) = read_joint_right[2];
@@ -580,9 +626,9 @@ void DualArmCartesianImpedanceExampleController::equilibriumConfigurationCallbac
 
 void DualArmCartesianImpedanceExampleController::equilibriumConfigurationCallback_left(const sensor_msgs::JointState::ConstPtr& joint) {
 
-  auto& left_arm_data = arms_data_.at(left_arm_id_); 
+  auto& left_arm_data = arms_data_.at(left_arm_id_);
   std::vector<double> read_joint_left;
-  read_joint_left= joint -> position;	
+  read_joint_left= joint -> position;
   left_arm_data.q_d_nullspace_(0) = read_joint_left[0];
   left_arm_data.q_d_nullspace_(1) = read_joint_left[1];
   left_arm_data.q_d_nullspace_(2) = read_joint_left[2];
@@ -590,8 +636,8 @@ void DualArmCartesianImpedanceExampleController::equilibriumConfigurationCallbac
   left_arm_data.q_d_nullspace_(4) = read_joint_left[4];
   left_arm_data.q_d_nullspace_(5) = read_joint_left[5];
   left_arm_data.q_d_nullspace_(6) = read_joint_left[6];
-  //std::cout << "left_arm_sub";	
-  //std::cout << 	left_arm_data.q_d_nullspace_;	
+  //std::cout << "left_arm_sub";
+  //std::cout << 	left_arm_data.q_d_nullspace_;
 }
 }  // namespace franka_example_controllers
 

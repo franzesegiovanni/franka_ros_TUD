@@ -46,16 +46,17 @@ struct FrankaDataContainer {
   Eigen::Matrix<double, 6, 6> cartesian_damping_;           ///< To damp cartesian motions.
 
   Eigen::Matrix<double, 7, 1> q_d_nullspace_;               ///< Target joint pose for nullspace
-  
+
                                                             ///< motion. For now we track the
                                                             ///< initial joint pose.
   Eigen::Vector3d position_d_;               ///< Target position of the end effector.
   Eigen::Quaterniond orientation_d_;         ///< Target orientation of the end effector.
 
   Eigen::Vector3d position_other_arm_;               ///< Target position of the end effector.
-  Eigen::Vector3d position_d_relative_;  
+  Eigen::Vector3d position_d_relative_;
 
-  Eigen::Matrix<double, 6, 6> cartesian_stiffness_relative_;         ///< To track the target pose. 
+  Eigen::Matrix<double, 6, 6> cartesian_stiffness_relative_;         ///< To track the target pose.
+  Eigen::Matrix<double, 6, 6> cartesian_damping_relative_;
 };
 
 /**
@@ -171,7 +172,7 @@ class DualArmCartesianImpedanceExampleController
   void equilibriumPoseCallback_right(const geometry_msgs::PoseStampedConstPtr& msg);
   ros::Subscriber sub_equilibrium_pose_left_;
   void equilibriumPoseCallback_left(const geometry_msgs::PoseStampedConstPtr& msg);
-  ros::Subscriber sub_equilibrium_relative_;
+  ros::Subscriber sub_equilibrium_distance_;
   void equilibriumPoseCallback_relative(const geometry_msgs::PoseStampedConstPtr& msg);
   ros::Subscriber sub_stiffness_;
   void equilibriumStiffnessCallback(const std_msgs::Float32MultiArray::ConstPtr& stiffness_);
@@ -180,6 +181,8 @@ class DualArmCartesianImpedanceExampleController
   ros::Subscriber sub_nullspace_left_;
   void equilibriumConfigurationCallback_left(const  sensor_msgs::JointState::ConstPtr&  joint);
   ros::Publisher pub_stiff_update_;
+  void ShareInformationPosition(const sensor_msgs::JointState& msg);
+  ros::Subscriber sub_share_info_;
 };
 
 }  // namespace franka_example_controllers
