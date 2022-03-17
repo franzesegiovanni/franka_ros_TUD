@@ -20,6 +20,7 @@ find_package(catkin REQUIRED COMPONENTS
   realtime_tools
   roscpp
   rospy
+  trac_ik_lib
 )
 
 find_package(Eigen3 REQUIRED)
@@ -62,6 +63,7 @@ add_library(franka_example_controllers
   src/joint_impedance_example_controller.cpp
   src/cartesian_impedance_example_controller.cpp
   src/dual_arm_cartesian_impedance_example_controller.cpp
+  src/panda_utils/panda_trac_ik.cpp
 )
 
 add_dependencies(franka_example_controllers

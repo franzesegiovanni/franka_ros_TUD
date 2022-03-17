@@ -25,6 +25,7 @@
 #include <franka_hw/franka_model_interface.h>
 #include <franka_hw/franka_state_interface.h>
 
+#include <panda_utils/panda_trac_ik.h>
 namespace franka_example_controllers {
 
 class CartesianImpedanceExampleController : public controller_interface::MultiInterfaceController<
@@ -81,17 +82,25 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   void equilibriumConfigurationCallback( const std_msgs::Float32MultiArray::ConstPtr& joint);
 
 
-  // Multi directional stiffness stiffnes 
+  // Equilibrium pose subscriber IK
+  ros::Subscriber sub_equilibrium_pose_ik;
+  //void equilibriumPoseCallback(const geometry_msgs::PoseStampedConstPtr& msg);
+  void equilibriumConfigurationIKCallback( const geometry_msgs::PoseStampedConstPtr& msg);
+  // Multi directional stiffness stiffnes
   ros::Subscriber sub_stiffness_;
   void equilibriumStiffnessCallback(const std_msgs::Float32MultiArray::ConstPtr& stiffness_);
 
   ros::Publisher pub_stiff_update_;
-                                                  
   ros::Publisher pub_cartesian_pose_;
   ros::Publisher pub_force_torque_;
-  
-                                                
-                                                  
+
+  PandaTracIK _panda_ik_service;
+  KDL::JntArray _joints_result;
+
+  hardware_interface::PositionJointInterface *_position_joint_interface;
+  std::vector<hardware_interface::JointHandle> _position_joint_handles;
+
+
 
 };
 
