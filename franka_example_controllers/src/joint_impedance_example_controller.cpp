@@ -3,85 +3,57 @@
 #include <franka_example_controllers/joint_impedance_example_controller.h>
 
 #include <cmath>
-#include <memory>
 
 #include <controller_interface/controller_base.h>
+#include <franka_example_controllers/franka_model.h>
+#include <franka/robot_state.h>
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
-
-#include <franka/robot_state.h>
-
+#include "pseudo_inversion.h"
 namespace franka_example_controllers {
 
 bool JointImpedanceExampleController::init(hardware_interface::RobotHW* robot_hw,
-                                           ros::NodeHandle& node_handle) {
+                                               ros::NodeHandle& node_handle) {
+  std::vector<double> cartesian_stiffness_vector;
+  std::vector<double> cartesian_damping_vector;
+
+
+  sub_stiffness_ = node_handle.subscribe(
+    "/stiffness", 20, &JointImpedanceExampleController::equilibriumStiffnessCallback, this,
+    ros::TransportHints().reliable().tcpNoDelay());
+  sub_equilibrium_pose_ik = node_handle.subscribe(
+        "/equilibrium_pose", 1, &JointImpedanceExampleController::equilibriumConfigurationIKCallback, this,
+        ros::TransportHints().reliable().tcpNoDelay());
+  pub_stiff_update_ = node_handle.advertise<dynamic_reconfigure::Config>(
+    "/dynamic_reconfigure_compliance_param_node/parameter_updates", 5);
+
+  pub_cartesian_pose_= node_handle.advertise<geometry_msgs::PoseStamped>("/cartesian_pose",1);
+
+  pub_force_torque_= node_handle.advertise<geometry_msgs::WrenchStamped>("/force_torque_ext",1);
+
   std::string arm_id;
   if (!node_handle.getParam("arm_id", arm_id)) {
-    ROS_ERROR("JointImpedanceExampleController: Could not read parameter arm_id");
+    ROS_ERROR_STREAM("JointImpedanceExampleController: Could not read parameter arm_id");
     return false;
   }
-  if (!node_handle.getParam("radius", radius_)) {
-    ROS_INFO_STREAM(
-        "JointImpedanceExampleController: No parameter radius, defaulting to: " << radius_);
-  }
-  if (std::fabs(radius_) < 0.005) {
-    ROS_INFO_STREAM("JointImpedanceExampleController: Set radius to small, defaulting to: " << 0.1);
-    radius_ = 0.1;
-  }
-
-  if (!node_handle.getParam("vel_max", vel_max_)) {
-    ROS_INFO_STREAM(
-        "JointImpedanceExampleController: No parameter vel_max, defaulting to: " << vel_max_);
-  }
-  if (!node_handle.getParam("acceleration_time", acceleration_time_)) {
-    ROS_INFO_STREAM(
-        "JointImpedanceExampleController: No parameter acceleration_time, defaulting to: "
-        << acceleration_time_);
-  }
-
   std::vector<std::string> joint_names;
   if (!node_handle.getParam("joint_names", joint_names) || joint_names.size() != 7) {
     ROS_ERROR(
-        "JointImpedanceExampleController: Invalid or no joint_names parameters provided, aborting "
-        "controller init!");
+        "JointImpedanceExampleController: Invalid or no joint_names parameters provided, "
+        "aborting controller init!");
     return false;
   }
 
-  if (!node_handle.getParam("k_gains", k_gains_) || k_gains_.size() != 7) {
-    ROS_ERROR(
-        "JointImpedanceExampleController:  Invalid or no k_gain parameters provided, aborting "
-        "controller init!");
-    return false;
-  }
-
-  if (!node_handle.getParam("d_gains", d_gains_) || d_gains_.size() != 7) {
-    ROS_ERROR(
-        "JointImpedanceExampleController:  Invalid or no d_gain parameters provided, aborting "
-        "controller init!");
-    return false;
-  }
-
-  double publish_rate(30.0);
-  if (!node_handle.getParam("publish_rate", publish_rate)) {
-    ROS_INFO_STREAM("JointImpedanceExampleController: publish_rate not found. Defaulting to "
-                    << publish_rate);
-  }
-  rate_trigger_ = franka_hw::TriggerRate(publish_rate);
-
-  if (!node_handle.getParam("coriolis_factor", coriolis_factor_)) {
-    ROS_INFO_STREAM("JointImpedanceExampleController: coriolis_factor not found. Defaulting to "
-                    << coriolis_factor_);
-  }
-
-  auto* model_interface = robot_hw->get<franka_hw::FrankaModelInterface>();
+  franka_hw::FrankaModelInterface* model_interface =
+      robot_hw->get<franka_hw::FrankaModelInterface>();
   if (model_interface == nullptr) {
     ROS_ERROR_STREAM(
         "JointImpedanceExampleController: Error getting model interface from hardware");
     return false;
   }
   try {
-    model_handle_ = std::make_unique<franka_hw::FrankaModelHandle>(
-        model_interface->getHandle(arm_id + "_model"));
+    model_handle_.reset(
+        new franka_hw::FrankaModelHandle(model_interface->getHandle(arm_id + "_model")));
   } catch (hardware_interface::HardwareInterfaceException& ex) {
     ROS_ERROR_STREAM(
         "JointImpedanceExampleController: Exception getting model handle from interface: "
@@ -89,23 +61,25 @@ bool JointImpedanceExampleController::init(hardware_interface::RobotHW* robot_hw
     return false;
   }
 
-  auto* cartesian_pose_interface = robot_hw->get<franka_hw::FrankaPoseCartesianInterface>();
-  if (cartesian_pose_interface == nullptr) {
+  franka_hw::FrankaStateInterface* state_interface =
+      robot_hw->get<franka_hw::FrankaStateInterface>();
+  if (state_interface == nullptr) {
     ROS_ERROR_STREAM(
-        "JointImpedanceExampleController: Error getting cartesian pose interface from hardware");
+        "JointImpedanceExampleController: Error getting state interface from hardware");
     return false;
   }
   try {
-    cartesian_pose_handle_ = std::make_unique<franka_hw::FrankaCartesianPoseHandle>(
-        cartesian_pose_interface->getHandle(arm_id + "_robot"));
+    state_handle_.reset(
+        new franka_hw::FrankaStateHandle(state_interface->getHandle(arm_id + "_robot")));
   } catch (hardware_interface::HardwareInterfaceException& ex) {
     ROS_ERROR_STREAM(
-        "JointImpedanceExampleController: Exception getting cartesian pose handle from interface: "
+        "JointImpedanceExampleController: Exception getting state handle from interface: "
         << ex.what());
     return false;
   }
 
-  auto* effort_joint_interface = robot_hw->get<hardware_interface::EffortJointInterface>();
+  hardware_interface::EffortJointInterface* effort_joint_interface =
+      robot_hw->get<hardware_interface::EffortJointInterface>();
   if (effort_joint_interface == nullptr) {
     ROS_ERROR_STREAM(
         "JointImpedanceExampleController: Error getting effort joint interface from hardware");
@@ -120,93 +94,332 @@ bool JointImpedanceExampleController::init(hardware_interface::RobotHW* robot_hw
       return false;
     }
   }
-  torques_publisher_.init(node_handle, "torque_comparison", 1);
 
-  std::fill(dq_filtered_.begin(), dq_filtered_.end(), 0);
+  dynamic_reconfigure_compliance_param_node_ =
+      ros::NodeHandle("dynamic_reconfigure_compliance_param_node");
+
+  dynamic_server_compliance_param_.reset(
+      new dynamic_reconfigure::Server<franka_example_controllers::compliance_paramConfig>(
+          dynamic_reconfigure_compliance_param_node_));
+  dynamic_server_compliance_param_->setCallback(
+      boost::bind(&JointImpedanceExampleController::complianceParamCallback, this, _1, _2));
+
+  position_d_.setZero();
+  orientation_d_.coeffs() << 0.0, 0.0, 0.0, 1.0;
+  //position_d_target_.setZero();
+  //orientation_d_target_.coeffs() << 0.0, 0.0, 0.0, 1.0;
+  cartesian_stiffness_.setZero();
+  cartesian_damping_.setZero();
+
+  stiff_.setZero();
 
   return true;
 }
 
 void JointImpedanceExampleController::starting(const ros::Time& /*time*/) {
-  initial_pose_ = cartesian_pose_handle_->getRobotState().O_T_EE_d;
+  // compute initial velocity with jacobian and set x_attractor and q_d_nullspace
+  // to initial configuration
+  franka::RobotState initial_state = state_handle_->getRobotState();
+  // get jacobian
+  std::array<double, 42> jacobian_array =
+      model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
+  // convert to eigen
+  Eigen::Map<Eigen::Matrix<double, 6, 7> > jacobian(jacobian_array.data());
+  Eigen::Map<Eigen::Matrix<double, 7, 1> > dq_initial(initial_state.dq.data());
+  Eigen::Map<Eigen::Matrix<double, 7, 1> > q_initial(initial_state.q.data());
+  Eigen::Affine3d initial_transform(Eigen::Matrix4d::Map(initial_state.O_T_EE.data()));
+  // set equilibrium point to current state
+  position_d_ = initial_transform.translation(); // this allows the robot to start on the starting configuration
+  orientation_d_ = Eigen::Quaterniond(initial_transform.linear()); // this allows the robot to start on the starting configuration
+  //position_d_target_ = initial_transform.translation();
+  //orientation_d_target_ = Eigen::Quaterniond(initial_transform.linear());
+  // set nullspace equilibrium configuration to initial q
+  q_d_nullspace_ = q_initial;
+  force_torque_old.setZero();
+  double time_old=ros::Time::now().toSec();
 }
 
 void JointImpedanceExampleController::update(const ros::Time& /*time*/,
-                                             const ros::Duration& period) {
-  if (vel_current_ < vel_max_) {
-    vel_current_ += period.toSec() * std::fabs(vel_max_ / acceleration_time_);
-  }
-  vel_current_ = std::fmin(vel_current_, vel_max_);
+                                                 const ros::Duration& /*period*/) {
+  // get state variables
+  franka::RobotState robot_state = state_handle_->getRobotState();
+  std::array<double, 7> coriolis_array = model_handle_->getCoriolis();
+  std::array<double, 49> mass_array = model_handle_->getMass();
+  Eigen::Map<Eigen::Matrix<double, 7, 7> > mass(mass_array.data());
+  std::array<double, 42> jacobian_array =
+      model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
 
-  angle_ += period.toSec() * vel_current_ / std::fabs(radius_);
-  if (angle_ > 2 * M_PI) {
-    angle_ -= 2 * M_PI;
-  }
-
-  double delta_y = radius_ * (1 - std::cos(angle_));
-  double delta_z = radius_ * std::sin(angle_);
-
-  std::array<double, 16> pose_desired = initial_pose_;
-  pose_desired[13] += delta_y;
-  pose_desired[14] += delta_z;
-  cartesian_pose_handle_->setCommand(pose_desired);
-
-  franka::RobotState robot_state = cartesian_pose_handle_->getRobotState();
-  std::array<double, 7> coriolis = model_handle_->getCoriolis();
+  // convert to Eigen
+  Eigen::Map<Eigen::Matrix<double, 7, 1> > coriolis(coriolis_array.data());
+  Eigen::Map<Eigen::Matrix<double, 6, 7> > jacobian(jacobian_array.data());
+  Eigen::Map<Eigen::Matrix<double, 7, 1> > q(robot_state.q.data());
+  Eigen::Map<Eigen::Matrix<double, 7, 1> > dq(robot_state.dq.data());
+  double time_=ros::Time::now().toSec();
+  //ddq=ddq+(dq-dq_old)/(time_-time_old);
+  //dq_old=dq;
+  //time_old=time_;
+  Eigen::Map<Eigen::Matrix<double, 7, 1> > tau_J_d(  // NOLINT (readability-identifier-naming)
+      robot_state.tau_J_d.data());
+  Eigen::Map<Eigen::Matrix<double, 7, 1> > tau_ext(robot_state.tau_ext_hat_filtered.data());
   std::array<double, 7> gravity = model_handle_->getGravity();
+  Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
+  Eigen::Vector3d position(transform.translation());
+  Eigen::Quaterniond orientation(transform.linear());
+  Eigen::Matrix<double, 7, 1>  tau_f;
+  Eigen::MatrixXd jacobian_transpose_pinv;
+  Eigen::MatrixXd Null_mat;
+  pseudoInverse(jacobian.transpose(), jacobian_transpose_pinv);
+  tau_f(0) =  FI_11/(1+exp(-FI_21*(dq(0)+FI_31))) - TAU_F_CONST_1;
+  tau_f(1) =  FI_12/(1+exp(-FI_22*(dq(1)+FI_32))) - TAU_F_CONST_2;
+  tau_f(2) =  FI_13/(1+exp(-FI_23*(dq(2)+FI_33))) - TAU_F_CONST_3;
+  tau_f(3) =  FI_14/(1+exp(-FI_24*(dq(3)+FI_34))) - TAU_F_CONST_4;
+  tau_f(4) =  FI_15/(1+exp(-FI_25*(dq(4)+FI_35))) - TAU_F_CONST_5;
+  tau_f(5) =  FI_16/(1+exp(-FI_26*(dq(5)+FI_36))) - TAU_F_CONST_6;
+  tau_f(6) =  FI_17/(1+exp(-FI_27*(dq(6)+FI_37))) - TAU_F_CONST_7;
 
-  double alpha = 0.99;
-  for (size_t i = 0; i < 7; i++) {
-    dq_filtered_[i] = (1 - alpha) * dq_filtered_[i] + alpha * robot_state.dq[i];
-  }
+  force_torque=force_torque-jacobian_transpose_pinv*(tau_ext-tau_f);
 
-  std::array<double, 7> tau_d_calculated;
-  for (size_t i = 0; i < 7; ++i) {
-    tau_d_calculated[i] = coriolis_factor_ * coriolis[i] +
-                          k_gains_[i] * (robot_state.q_d[i] - robot_state.q[i]) +
-                          d_gains_[i] * (robot_state.dq_d[i] - dq_filtered_[i]);
-  }
-
-  // Maximum torque difference with a sampling rate of 1 kHz. The maximum torque rate is
-  // 1000 * (1 / sampling_time).
-  std::array<double, 7> tau_d_saturated = saturateTorqueRate(tau_d_calculated, robot_state.tau_J_d);
-
-  for (size_t i = 0; i < 7; ++i) {
-    joint_handles_[i].setCommand(tau_d_saturated[i]);
-  }
-
-  if (rate_trigger_() && torques_publisher_.trylock()) {
-    std::array<double, 7> tau_j = robot_state.tau_J;
-    std::array<double, 7> tau_error;
-    double error_rms(0.0);
-    for (size_t i = 0; i < 7; ++i) {
-      tau_error[i] = last_tau_d_[i] - tau_j[i];
-      error_rms += std::sqrt(std::pow(tau_error[i], 2.0)) / 7.0;
+  // publish force, torque
+  filter_step=filter_step+1;
+  filter_step_=10;
+  alpha=1;
+  if (filter_step==filter_step_){
+    geometry_msgs::WrenchStamped force_torque_msg;
+    force_torque_msg.wrench.force.x=force_torque_old[0]*(1-alpha)+force_torque[0]*alpha/(filter_step_);
+    force_torque_msg.wrench.force.y=force_torque_old[1]*(1-alpha)+ force_torque[1]*alpha/(filter_step_);
+    force_torque_msg.wrench.force.z=force_torque_old[2]*(1-alpha)+force_torque[2]*alpha/(filter_step_);
+    force_torque_msg.wrench.torque.x=force_torque_old[3]*(1-alpha)+force_torque[3]*alpha/(filter_step_);
+    force_torque_msg.wrench.torque.y=force_torque_old[4]*(1-alpha)+force_torque[4]*alpha/(filter_step_);
+    force_torque_msg.wrench.torque.z=force_torque_old[5]*(1-alpha)+force_torque[5]*alpha/(filter_step_);
+    pub_force_torque_.publish(force_torque_msg);
+    force_torque_old=force_torque/(filter_step_);
+    force_torque.setZero();
+    //ddq.setZero();
+    filter_step=0;
     }
-    torques_publisher_.msg_.root_mean_square_error = error_rms;
-    for (size_t i = 0; i < 7; ++i) {
-      torques_publisher_.msg_.tau_commanded[i] = last_tau_d_[i];
-      torques_publisher_.msg_.tau_error[i] = tau_error[i];
-      torques_publisher_.msg_.tau_measured[i] = tau_j[i];
-    }
-    torques_publisher_.unlockAndPublish();
+
+  geometry_msgs::PoseStamped pose_msg;
+  pose_msg.pose.position.x=position[0];
+  pose_msg.pose.position.y=position[1];
+  pose_msg.pose.position.z=position[2];
+  pose_msg.pose.orientation.x=orientation.x();
+  pose_msg.pose.orientation.y=orientation.y();
+  pose_msg.pose.orientation.z=orientation.z();
+  pose_msg.pose.orientation.w=orientation.w();
+  pub_cartesian_pose_.publish(pose_msg);
+  // compute error to desired pose
+  // position error
+  Eigen::Matrix<double, 6, 1> error;
+  error.head(3) << position - position_d_;
+
+  // orientation error
+  if (orientation_d_.coeffs().dot(orientation.coeffs()) < 0.0) {
+    orientation.coeffs() << -orientation.coeffs();
+  }
+  // "difference" quaternion
+  Eigen::Quaterniond error_quaternion(orientation * orientation_d_.inverse());
+  // convert to axis angle
+  Eigen::AngleAxisd error_quaternion_angle_axis(error_quaternion);
+  // compute "orientation error"
+  error.tail(3) << error_quaternion_angle_axis.axis() * error_quaternion_angle_axis.angle();
+
+  // compute control
+  // allocate variables
+  Eigen::VectorXd tau_task(7), tau_nullspace(7), tau_d(7), null_vect(7), tau_joint_limit(7);
+
+  // pseudoinverse for nullspace handling
+  // kinematic pseuoinverse
+
+  Null_mat=(Eigen::MatrixXd::Identity(7, 7) -jacobian.transpose() * jacobian_transpose_pinv);
+  null_vect.setZero();
+
+  null_vect(0)=std::max(-0.1,std::min((q_d_nullspace_(0) - q(0)),0.1));
+  null_vect(1)=std::max(-0.1,std::min((q_d_nullspace_(1) - q(1)),0.1));
+  null_vect(2)=std::max(-0.1,std::min((q_d_nullspace_(2) - q(2)),0.1));
+  null_vect(3)=std::max(-0.1,std::min((q_d_nullspace_(3) - q(3)),0.1));
+  null_vect(4)=std::max(-0.1,std::min((q_d_nullspace_(4) - q(4)),0.1));
+  null_vect(5)=std::max(-0.1,std::min((q_d_nullspace_(5) - q(5)),0.1));
+  null_vect(6)=std::max(-0.1,std::min((q_d_nullspace_(6) - q(6)),0.1));
+  // Joint PD control with damping ratio = 1
+  tau_task << jacobian.transpose() *
+                  (cartesian_stiffness_ * (jacobian * null_vect) -  cartesian_damping_ * (jacobian * dq)); //double critic damping
+  tau_joint_limit.setZero();
+  if (q(0)>2.85)     { tau_joint_limit(0)=-10; }
+  if (q(0)<-2.85)    { tau_joint_limit(0)=+10; }
+  if (q(1)>1.7)      { tau_joint_limit(1)=-10; }
+  if (q(1)<-1.7)     { tau_joint_limit(1)=+10; }
+  if (q(2)>2.85)     { tau_joint_limit(2)=-10; }
+  if (q(2)<-2.85)    { tau_joint_limit(2)=+10; }
+  if (q(3)>-0.1)     { tau_joint_limit(3)=-10; }
+  if (q(3)<-3.0)     { tau_joint_limit(3)=+10; }
+  if (q(4)>2.85)     { tau_joint_limit(4)=-10; }
+  if (q(4)<-2.85)    { tau_joint_limit(4)=+10; }
+  if (q(5)>3.7)      { tau_joint_limit(5)=-10; }
+  if (q(5)<-0.1)     { tau_joint_limit(5)=+10; }
+  if (q(6)>2.8)      { tau_joint_limit(6)=-10; }
+  if (q(6)<-2.8)     { tau_joint_limit(6)=+10; }
+  // Desired torque
+  tau_d << tau_task + coriolis + tau_joint_limit;
+  // Saturate torque rate to avoid discontinuities
+  tau_d << saturateTorqueRate(tau_d, tau_J_d);
+  for (size_t i = 0; i < 7; ++i) {
+    joint_handles_[i].setCommand(tau_d(i));
   }
 
-  for (size_t i = 0; i < 7; ++i) {
-    last_tau_d_[i] = tau_d_saturated[i] + gravity[i];
-  }
+  cartesian_stiffness_ =cartesian_stiffness_target_;
+  cartesian_damping_   = cartesian_damping_target_;
+  nullspace_stiffness_ = nullspace_stiffness_target_;
+  Eigen::AngleAxisd aa_orientation_d(orientation_d_);
+  orientation_d_ = Eigen::Quaterniond(aa_orientation_d);
 }
 
-std::array<double, 7> JointImpedanceExampleController::saturateTorqueRate(
-    const std::array<double, 7>& tau_d_calculated,
-    const std::array<double, 7>& tau_J_d) {  // NOLINT (readability-identifier-naming)
-  std::array<double, 7> tau_d_saturated{};
+Eigen::Matrix<double, 7, 1> JointImpedanceExampleController::saturateTorqueRate(
+    const Eigen::Matrix<double, 7, 1>& tau_d_calculated,
+    const Eigen::Matrix<double, 7, 1>& tau_J_d) {  // NOLINT (readability-identifier-naming)
+  Eigen::Matrix<double, 7, 1> tau_d_saturated{};
   for (size_t i = 0; i < 7; i++) {
     double difference = tau_d_calculated[i] - tau_J_d[i];
-    tau_d_saturated[i] = tau_J_d[i] + std::max(std::min(difference, kDeltaTauMax), -kDeltaTauMax);
+    tau_d_saturated[i] =
+        tau_J_d[i] + std::max(std::min(difference, delta_tau_max_), -delta_tau_max_);
   }
   return tau_d_saturated;
 }
+
+void JointImpedanceExampleController::equilibriumStiffnessCallback(
+    const std_msgs::Float32MultiArray::ConstPtr& stiffness_){
+
+  int i = 0;
+  // print all the remaining numbers
+  for(std::vector<float>::const_iterator it = stiffness_->data.begin(); it != stiffness_->data.end(); ++it)
+  {
+    stiff_[i] = *it;
+    i++;
+  }
+
+  cartesian_stiffness_target_(0,0)=std::max(std::min(stiff_[0], float(4000.0)), float(0.0));
+  cartesian_stiffness_target_(1,1)=std::max(std::min(stiff_[1], float(4000.0)), float(0.0));
+  cartesian_stiffness_target_(2,2)=std::max(std::min(stiff_[2], float(4000.0)), float(0.0));
+
+  cartesian_damping_target_(0,0)=2.0 * sqrt(cartesian_stiffness_target_(0,0));
+  cartesian_damping_target_(1,1)=2.0 * sqrt(cartesian_stiffness_target_(1,1));
+  cartesian_damping_target_(2,2)=2.0 * sqrt(cartesian_stiffness_target_(2,2));
+
+  cartesian_stiffness_target_(3,3)=std::max(std::min(stiff_[3], float(50.0)), float(0.0));
+  cartesian_stiffness_target_(4,4)=std::max(std::min(stiff_[4], float(50.0)), float(0.0));
+  cartesian_stiffness_target_(5,5)=std::max(std::min(stiff_[5], float(50.0)), float(0.0));
+
+  cartesian_damping_target_(3,3)=2.0 * sqrt(cartesian_stiffness_target_(3,3));
+  cartesian_damping_target_(4,4)=2.0 * sqrt(cartesian_stiffness_target_(4,4));
+  cartesian_damping_target_(5,5)=2.0 * sqrt(cartesian_stiffness_target_(5,5));
+
+  nullspace_stiffness_target_= std::max(std::min(stiff_[6], float(20.0)), float(0.0));
+
+
+  dynamic_reconfigure::Config set_Kx;
+  dynamic_reconfigure::DoubleParameter param_X_double;
+  param_X_double.name = "translational_stiffness_X";
+  param_X_double.value = cartesian_stiffness_target_(0,0);
+  set_Kx.doubles = {param_X_double};
+  pub_stiff_update_.publish(set_Kx);
+
+  dynamic_reconfigure::Config set_Ky;
+  dynamic_reconfigure::DoubleParameter param_Y_double;
+  param_Y_double.name = "translational_stiffness_Y";
+  param_Y_double.value = cartesian_stiffness_target_(1,1);
+  set_Ky.doubles = {param_Y_double};
+  pub_stiff_update_.publish(set_Ky);
+
+  dynamic_reconfigure::Config set_Kz;
+  dynamic_reconfigure::DoubleParameter param_Z_double;
+  param_Z_double.name = "translational_stiffness_Z";
+  param_Z_double.value = cartesian_stiffness_target_(2,2);
+  set_Kz.doubles = {param_Z_double};
+  pub_stiff_update_.publish(set_Kz);
+
+  dynamic_reconfigure::Config set_K_alpha;
+  dynamic_reconfigure::DoubleParameter param_alpha_double;
+  param_alpha_double.name = "rotational_stiffness_X";
+  param_alpha_double.value = cartesian_stiffness_target_(3,3);
+  set_K_alpha.doubles = {param_alpha_double};
+  pub_stiff_update_.publish(set_K_alpha);
+
+  dynamic_reconfigure::Config set_K_beta;
+  dynamic_reconfigure::DoubleParameter param_beta_double;
+  param_beta_double.name = "rotational_stiffness_Y";
+  param_beta_double.value = cartesian_stiffness_target_(4,4);
+  set_K_beta.doubles = {param_beta_double};
+  pub_stiff_update_.publish(set_K_beta);
+
+  dynamic_reconfigure::Config set_K_gamma;
+  dynamic_reconfigure::DoubleParameter param_gamma_double;
+  param_gamma_double.name = "rotational_stiffness_Z";
+  param_gamma_double.value = cartesian_stiffness_target_(5,5);
+  set_K_gamma.doubles = {param_gamma_double};
+  pub_stiff_update_.publish(set_K_gamma);
+
+  dynamic_reconfigure::Config set_nullspace;
+  dynamic_reconfigure::DoubleParameter param_nullspace_double;
+  param_nullspace_double.name = "nullspace_stiffness";
+  param_nullspace_double.value = nullspace_stiffness_target_;
+  set_nullspace.doubles = {param_nullspace_double};
+  pub_stiff_update_.publish(set_nullspace);
+
+}
+
+void JointImpedanceExampleController::complianceParamCallback(
+    franka_example_controllers::compliance_paramConfig& config,
+    uint32_t /*level*/) {
+  cartesian_stiffness_target_.setIdentity();
+  cartesian_stiffness_target_(0,0)=config.translational_stiffness_X;
+  cartesian_stiffness_target_(1,1)=config.translational_stiffness_Y;
+  cartesian_stiffness_target_(2,2)=config.translational_stiffness_Z;
+  cartesian_stiffness_target_(3,3)=config.rotational_stiffness_X;
+  cartesian_stiffness_target_(4,4)=config.rotational_stiffness_Y;
+  cartesian_stiffness_target_(5,5)=config.rotational_stiffness_Z;
+
+  cartesian_damping_target_(0,0)=2.0 * sqrt(config.translational_stiffness_X);
+  cartesian_damping_target_(1,1)=2.0 * sqrt(config.translational_stiffness_Y);
+  cartesian_damping_target_(2,2)=2.0 * sqrt(config.translational_stiffness_Z);
+  cartesian_damping_target_(3,3)=2.0 * sqrt(config.rotational_stiffness_X);
+  cartesian_damping_target_(4,4)=2.0 * sqrt(config.rotational_stiffness_Y);
+  cartesian_damping_target_(5,5)=2.0 * sqrt(config.rotational_stiffness_Z);
+  nullspace_stiffness_target_ = config.nullspace_stiffness;
+}
+
+void JointImpedanceExampleController::equilibriumConfigurationIKCallback( const geometry_msgs::PoseStampedConstPtr& msg) {
+  geometry_msgs::Pose pose_msg_;
+  position_d_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
+  Eigen::Quaterniond last_orientation_d_(orientation_d_);
+  orientation_d_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
+      msg->pose.orientation.z, msg->pose.orientation.w;
+  if (last_orientation_d_.coeffs().dot(orientation_d_.coeffs()) < 0.0) {
+    orientation_d_.coeffs() << -orientation_d_.coeffs();
+}
+  pose_msg_.position.x=position_d_[0];
+  pose_msg_.position.y=position_d_[1];
+  pose_msg_.position.z=position_d_[2];
+  pose_msg_.orientation.x=orientation_d_.coeffs()[0];
+  pose_msg_.orientation.y=orientation_d_.coeffs()[1];
+  pose_msg_.orientation.z=orientation_d_.coeffs()[2];
+  pose_msg_.orientation.w=orientation_d_.coeffs()[3];
+  // use tracik to get joint positions from target pose
+  //std::cout << pose_msg_;
+  KDL::JntArray ik_result = _panda_ik_service.perform_ik(pose_msg_);
+  _joints_result = (_panda_ik_service.is_valid) ? ik_result : _joints_result;
+  _joints_result.resize(7);
+  if (_panda_ik_service.is_valid) {
+  for (int i = 0; i < 7; i++)
+  {
+      //_joints_result(i) = _position_joint_handles[i].getPosition();
+      q_d_nullspace_(i) = _joints_result(i);
+      //_iters[i] = 0;
+  }
+  //std::cout << q_d_nullspace_;
+  //return;
+}
+else{std::cout << 'Inverse Kinematics not valid';};
+}
+
 
 }  // namespace franka_example_controllers
 
