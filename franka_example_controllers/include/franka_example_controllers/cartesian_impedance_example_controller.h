@@ -49,7 +49,7 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   double nullspace_stiffness_{0.0};
   double nullspace_stiffness_target_{0.0};
   double dt{0.001};
-  double time_old;
+  double time_start;
   int alpha;
   int filter_step{0};
   int filter_step_;
