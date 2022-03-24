@@ -71,13 +71,13 @@ int main(int argc, char **argv)
 
    geometry_msgs::PoseStamped msg_right;
    geometry_msgs::PoseStamped msg_left;
-   double time_zero=ros::Time::now().toSec();
+   //double time_zero=ros::Time::now().toSec();
 
   while (ros::ok())
   {
-    double time_now=ros::Time::now().toSec();
-    msg_right.header.stamp.sec=(time_now-time_zero);
-    msg_left.header.stamp.sec=(time_now-time_zero);
+    double time_now=ros::Time::now().toNSec();
+    msg_right.header.stamp.nsec=time_now;//(time_now-time_zero);
+    msg_left.header.stamp.nsec=time_now;//(time_now-time_zero);
     //Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
     
     msg_right.pose.position.x=Position_right[0];
