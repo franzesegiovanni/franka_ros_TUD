@@ -104,6 +104,24 @@ target_link_libraries(franka_gripper_online
 target_include_directories(franka_gripper_online SYSTEM PUBLIC
   ${catkin_INCLUDE_DIRS}
 )
+add_executable(franka_gripper_pick_place
+  src/franka_gripper_pick_place.cpp
+)
+
+add_dependencies(franka_gripper_pick_place
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+  franka_gripper
+)
+
+target_link_libraries(franka_gripper_pick_place
+   ${catkin_LIBRARIES}
+   franka_gripper
+)
+
+target_include_directories(franka_gripper_pick_place SYSTEM PUBLIC
+  ${catkin_INCLUDE_DIRS}
+)
 
 ## Installation
 install(TARGETS franka_gripper

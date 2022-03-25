@@ -31,17 +31,18 @@ int main(int argc, char **argv)
   ros::Rate loop_rate(30);
 
   ros::Subscriber sub = n.subscribe("gripper_online", 1000, chatterCallback);
-  ros::Publisher pub = n.advertise<franka_gripper::MoveActionGoal>("/franka_gripper/move/goal", 1000);
-
+  ros::Publisher pub = n.advertise<franka_gripper::MoveActionGoal>("/franka_gripper/move/goal", 1);
+  ros::Publisher pub_stop = n.advertise<franka_gripper::StopAction>("/franka_gripper/stop", 1);
   franka_gripper::MoveActionGoal msg;
   msg.goal.speed = 1;
-
+  franka_gripper::StopActionGoal msg_stop;
   while (ros::ok())
   {
    if(flag==1)
    {
-     msg.goal.width = width;
      
+     msg.goal.width = width;
+     pub_stop.publish(msg_stop);
      pub.publish(msg);
      flag = 0;
     }
