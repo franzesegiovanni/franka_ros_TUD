@@ -10,6 +10,8 @@
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
 #include "pseudo_inversion.h"
+#include <franka_example_controllers/model_kdl.h>
+
 namespace franka_example_controllers {
 
 bool CartesianImpedanceExampleController::init(hardware_interface::RobotHW* robot_hw,
@@ -201,7 +203,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
     //ddq.setZero();
     filter_step=0;
     }
-  
+
   geometry_msgs::PoseStamped pose_msg;
   pose_msg.pose.position.x=position[0];
   pose_msg.pose.position.y=position[1];
@@ -229,7 +231,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
 
   // compute control
   // allocate variables
-  Eigen::VectorXd tau_task(7), tau_nullspace(7), tau_d(7), null_vect(7), tau_joint_limit(7);
+  Eigen::VectorXd tau_task(7), tau_nullspace(7), tau_d(7), null_vect(7), tau_joint_limit(7), tau_grav_old(7), tau_grav_new(7) ;
 
   // pseudoinverse for nullspace handling
   // kinematic pseuoinverse
@@ -267,7 +269,59 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   if (q(6)>2.8)      { tau_joint_limit(6)=-10; }
   if (q(6)<-2.8)     { tau_joint_limit(6)=+10; }
   // Desired torque
-  tau_d << tau_task + tau_nullspace + coriolis+ tau_joint_limit;
+  std::array<double, 3> gravity_earth;
+  std::array<double, 7> q_kdl;
+  q_kdl[0]=q[0];
+  q_kdl[1]=q[1];
+  q_kdl[2]=q[2];
+  q_kdl[3]=q[3];
+  q_kdl[4]=q[4];
+  q_kdl[5]=q[5];
+  q_kdl[6]=q[6];
+  gravity_earth[0]= 0;
+  gravity_earth[1]= 0;
+  gravity_earth[2]= -9.81;
+  double m_total=0;
+  std::array<double, 3> F_x_Ctotal;
+  F_x_Ctotal[0]=0;
+  F_x_Ctotal[1]=0;
+  F_x_Ctotal[2]=0;
+  std::array<double, 7> gravity_old = model_handle_->getGravity();
+  //franka_example_controllers model_kdl;
+  // std::array<double, 7> gravity_new =franka_example_controllers::ModelKDL::gravity(q_kdl, m_total, F_x_Ctotal, gravity_vect);
+  //std::array<double, 7> gravity_new =model_kdl.gravity(q_kdl, m_total, F_x_Ctotal, gravity_vect);
+  KDL::JntArray kq, kg(7);
+  KDL::Vector grav(gravity_earth[0], gravity_earth[1], gravity_earth[2]);
+  kq.data = Eigen::Matrix<double, 7, 1>(q_kdl.data());
+  KDL::Chain chain;
+  //KDL::Chain chain = this->chain_;  // copy
+  //augmentFrame("load", F_x_Ctotal, m_total, {1, 0, 0, 0, 1, 0, 0, 0, 1}, chain);
+  KDL::ChainDynParam solver(chain, grav);
+
+  int error_kdl = solver.JntToGravity(kq, kg);
+  // if (error_kdl != KDL::SolverI::E_NOERROR) {
+  //   throw std::logic_error("KDL gravity calculation failed with error: " + strError(error_kdl));
+  // }
+
+  std::array<double, 7> result_kdl;
+  Eigen::VectorXd::Map(&result_kdl[0], kg.data.size()) = kg.data;
+  
+  tau_grav_new(0)= result_kdl[0];
+  tau_grav_new(1)= result_kdl[1];
+  tau_grav_new(2)= result_kdl[2];
+  tau_grav_new(3)= result_kdl[3];
+  tau_grav_new(4)= result_kdl[4];
+  tau_grav_new(5)= result_kdl[5];
+  tau_grav_new(6)= result_kdl[6];
+  ROS_INFO_STREAM("gravity_kdl :" << tau_grav_new);
+  tau_grav_old(0)= gravity_old[0];
+  tau_grav_old(1)= gravity_old[1];
+  tau_grav_old(2)= gravity_old[2];
+  tau_grav_old(3)= gravity_old[3];
+  tau_grav_old(4)= gravity_old[4];
+  tau_grav_old(5)= gravity_old[5];
+  tau_grav_old(6)= gravity_old[6];
+  tau_d << tau_task + tau_nullspace + coriolis+ tau_joint_limit-tau_grav_old+tau_grav_new;
   // Saturate torque rate to avoid discontinuities
   tau_d << saturateTorqueRate(tau_d, tau_J_d);
   for (size_t i = 0; i < 7; ++i) {

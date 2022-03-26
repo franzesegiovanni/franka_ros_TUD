@@ -25,8 +25,11 @@
 #include <franka_hw/franka_model_interface.h>
 #include <franka_hw/franka_state_interface.h>
 
+//#include <franka_example_controllers/model_kdl.cpp>
+//#include <franka_example_controllers/model_kdl.h>
 namespace franka_example_controllers {
 
+      
 class CartesianImpedanceExampleController : public controller_interface::MultiInterfaceController<
                                                 franka_hw::FrankaModelInterface,
                                                 hardware_interface::EffortJointInterface,
@@ -88,12 +91,7 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   ros::Publisher pub_stiff_update_;
                                                   
   ros::Publisher pub_cartesian_pose_;
-  ros::Publisher pub_force_torque_;
-  
-                                                
-                                                  
-
+  ros::Publisher pub_force_torque_;                                           
 };
-
 
 }  // namespace franka_example_controllers
