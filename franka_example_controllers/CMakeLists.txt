@@ -20,12 +20,10 @@ find_package(catkin REQUIRED COMPONENTS
   realtime_tools
   roscpp
   rospy
-  kdl_parser
 )
 
 find_package(Eigen3 REQUIRED)
 find_package(Franka 0.7.0 REQUIRED)
-find_package(orocos_kdl REQUIRED)
 
 add_message_files(FILES
   JointTorqueComparison.msg
@@ -56,8 +54,6 @@ catkin_package(
     pluginlib
     realtime_tools
     roscpp
-    kdl_parser
-  DEPENDS Franka orocos_kdl
 )
 
 add_library(franka_example_controllers
@@ -65,7 +61,6 @@ add_library(franka_example_controllers
   src/joint_impedance_example_controller.cpp
   src/cartesian_impedance_example_controller.cpp
   src/dual_arm_cartesian_impedance_example_controller.cpp
-  src/model_kdl.cpp
 )
 
 add_dependencies(franka_example_controllers
@@ -79,13 +74,11 @@ add_dependencies(franka_example_controllers
 target_link_libraries(franka_example_controllers PUBLIC
   ${Franka_LIBRARIES}
   ${catkin_LIBRARIES}
-  ${orocos_kdl_LIBRARIES}
 )
 
 target_include_directories(franka_example_controllers SYSTEM PUBLIC
   ${Franka_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
-  ${orocos_kdl_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
 )
 target_include_directories(franka_example_controllers PUBLIC
