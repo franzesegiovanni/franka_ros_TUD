@@ -125,6 +125,10 @@ bool DualArmCartesianImpedanceExampleController::init(hardware_interface::RobotH
         "aborting controller init!");
     return false;
   }
+  auto& left_arm_data = arms_data_.at(left_arm_id_);
+  left_arm_data.gravity_new={{0., 0.,-9.81}};
+  auto& right_arm_data = arms_data_.at(right_arm_id_);
+  right_arm_data.gravity_new={{0., 0.,-9.81}};
 
   bool left_success = initArm(robot_hw, left_arm_id_, left_joint_names);
   bool right_success = initArm(robot_hw, right_arm_id_, right_joint_names);
@@ -302,7 +306,7 @@ void DualArmCartesianImpedanceExampleController::updateArm(FrankaDataContainer& 
 
   // compute control
   // allocate variables
-  Eigen::VectorXd tau_task(7), tau_nullspace(7), tau_d(7), tau_joint_limit(7), null_space_error(7), tau_relative(7);
+  Eigen::VectorXd tau_task(7), tau_nullspace(7), tau_d(7), tau_joint_limit(7), null_space_error(7), tau_relative(7), tau_grav_old(7), tau_grav_new(7) ;
 
   // pseudoinverse for nullspace handling
   // kinematic pseuoinverse
@@ -341,6 +345,13 @@ void DualArmCartesianImpedanceExampleController::updateArm(FrankaDataContainer& 
   if (q(5)<-0.1)     { tau_joint_limit(5)=+5; }
   if (q(6)>2.8)      { tau_joint_limit(6)=-5; }
   if (q(6)<-2.8)     { tau_joint_limit(6)=+5; }
+  
+  // std::array< double, 3 > gravity_new={{0., 0.,-9.81}};
+  std::array<double, 7> gravity_old_array = arm_data.model_handle_->getGravity();
+  std::array<double, 7> gravity_new_array = arm_data.model_handle_->getGravity(arm_data.gravity_new); //change the new gravity vector in lines 128 and 130. They should have opposite sign!
+  Eigen::Map<Eigen::Matrix<double, 7, 1> > gravity_old(gravity_old_array.data());
+  Eigen::Map<Eigen::Matrix<double, 7, 1> > gravity_new(gravity_new_array.data());
+
 
   tau_relative << jacobian.transpose() * (-arm_data.cartesian_stiffness_relative_ * error_relative-
                                       arm_data.cartesian_damping_relative_ * (jacobian * dq));

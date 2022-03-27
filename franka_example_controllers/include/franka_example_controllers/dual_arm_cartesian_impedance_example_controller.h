@@ -57,6 +57,8 @@ struct FrankaDataContainer {
 
   Eigen::Matrix<double, 6, 6> cartesian_stiffness_relative_;         ///< To track the target pose.
   Eigen::Matrix<double, 6, 6> cartesian_damping_relative_;
+
+  std::array< double, 3 > gravity_new;
 };
 
 /**
