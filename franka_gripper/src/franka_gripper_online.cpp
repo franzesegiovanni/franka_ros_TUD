@@ -11,6 +11,7 @@
 #include <franka_gripper/franka_gripper.h>
 
 double width =0;
+double width_old=1;
 double flag =0;
 
 void chatterCallback(const std_msgs::Float32::ConstPtr& msg)
@@ -31,19 +32,28 @@ int main(int argc, char **argv)
   ros::Rate loop_rate(30);
 
   ros::Subscriber sub = n.subscribe("gripper_online", 1000, chatterCallback);
-  ros::Publisher pub = n.advertise<franka_gripper::MoveActionGoal>("/franka_gripper/move/goal", 1);
-  ros::Publisher pub_stop = n.advertise<franka_gripper::StopAction>("/franka_gripper/stop", 1);
-  franka_gripper::MoveActionGoal msg;
-  msg.goal.speed = 1;
-  franka_gripper::StopActionGoal msg_stop;
+  ros::Publisher pub_move = n.advertise<franka_gripper::MoveActionGoal>("/franka_gripper/move/goal", 1);
+  //ros::Publisher pub_stop = n.advertise<franka_gripper::StopAction>("/franka_gripper/stop", 1);
+  ros::Publisher pub_grasp = n.advertise<franka_gripper::GraspActionGoal>("/franka_gripper/grasp/goal", 1);
+  franka_gripper::MoveActionGoal msg_move;
+  franka_gripper::GraspActionGoal msg_grasp;
+  msg_move.goal.speed = 1;
+  msg_grasp.goal.speed = 1;
+  
+  //franka_gripper::StopActionGoal msg_stop;
   while (ros::ok())
   {
    if(flag==1)
    {
      
-     msg.goal.width = width;
-     pub_stop.publish(msg_stop);
-     pub.publish(msg);
+     
+     if(width<width_old) {
+     msg_move.goal.width = width;
+     pub_move.publish(msg_move);}
+     else {
+       msg_grasp.goal.width = width;
+       pub_grasp.publish(msg_grasp);}
+     width_old=width;
      flag = 0;
     }
 
