@@ -13,7 +13,7 @@
 double width =0;
 double width_old=1;
 double flag =0;
-double tolerance=0.0;
+double tolerance=0.001;
 void chatterCallback(const std_msgs::Float32::ConstPtr& msg)
 {
   width=msg->data;
@@ -31,7 +31,7 @@ int main(int argc, char **argv)
   ros::NodeHandle n;
   ros::Rate loop_rate(30);
 
-  ros::Subscriber sub = n.subscribe("gripper_online", 1000, chatterCallback);
+  ros::Subscriber sub = n.subscribe("gripper_online", 0, chatterCallback);
   ros::Publisher pub_move = n.advertise<franka_gripper::MoveActionGoal>("/franka_gripper/move/goal", 0);
   //ros::Publisher pub_stop = n.advertise<franka_gripper::StopAction>("/franka_gripper/stop", 1);
   ros::Publisher pub_grasp = n.advertise<franka_gripper::GraspActionGoal>("/franka_gripper/grasp/goal", 0);
@@ -47,7 +47,7 @@ int main(int argc, char **argv)
    {
      
      
-     if(width<(width_old+tollerance)) {
+     if(width<(width_old+tolerance)) {
      msg_move.goal.width = width;
      pub_move.publish(msg_move);}
      else {
