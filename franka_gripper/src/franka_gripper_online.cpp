@@ -13,7 +13,7 @@
 double width =0;
 double width_old=1;
 double flag =0;
-
+double tollerance=0.01;
 void chatterCallback(const std_msgs::Float32::ConstPtr& msg)
 {
   width=msg->data;
@@ -47,7 +47,7 @@ int main(int argc, char **argv)
    {
      
      
-     if(width<width_old) {
+     if(width<(width_old+tollerance)) {
      msg_move.goal.width = width;
      pub_move.publish(msg_move);}
      else {
