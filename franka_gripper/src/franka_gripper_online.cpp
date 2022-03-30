@@ -13,7 +13,7 @@
 double width =0;
 double width_old=1;
 double flag =0;
-double tollerance=0.01;
+double tolerance=0.0;
 void chatterCallback(const std_msgs::Float32::ConstPtr& msg)
 {
   width=msg->data;
