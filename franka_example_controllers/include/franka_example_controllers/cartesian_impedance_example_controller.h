@@ -13,6 +13,7 @@
 #include "std_msgs/MultiArrayLayout.h"
 #include "std_msgs/MultiArrayDimension.h"
 #include "std_msgs/Float32MultiArray.h"
+#include "std_msgs/TwistStamped.h"
 #include <hardware_interface/joint_command_interface.h>
 #include <hardware_interface/robot_hw.h>
 #include <dynamic_reconfigure/Config.h>
@@ -57,6 +58,7 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   Eigen::Matrix<double, 6, 6> cartesian_stiffness_;
   Eigen::Matrix<double, 6, 6> cartesian_damping_;
   Eigen::Matrix<double, 7, 1> q_d_nullspace_;
+  Eigen::Matrix<double, 3, 1> vel_d;
   Eigen::Matrix<double, 6, 6> cartesian_stiffness_target_;
   Eigen::Matrix<double, 6, 6> cartesian_damping_target_;
   Eigen::Matrix<double, 6, 1> force_torque;
@@ -80,13 +82,16 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   ros::Subscriber sub_equilibrium_config_;
   void equilibriumConfigurationCallback( const std_msgs::Float32MultiArray::ConstPtr& joint);
 
+  // Velocity subscriber
+  ros::Subscriber sub_equilibrium_velocity_;
+  void equilibriumVelocityCallback( const std_msgs::TwistStampedConstPtr& velocity);
 
   // Multi directional stiffness stiffnes 
   ros::Subscriber sub_stiffness_;
   void equilibriumStiffnessCallback(const std_msgs::Float32MultiArray::ConstPtr& stiffness_);
 
-  ros::Publisher pub_stiff_update_;
-                                                  
+  
+  ros::Publisher pub_stiff_update_;                                                
   ros::Publisher pub_cartesian_pose_;
   ros::Publisher pub_force_torque_;
   

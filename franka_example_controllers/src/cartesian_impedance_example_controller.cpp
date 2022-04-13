@@ -28,12 +28,18 @@ bool CartesianImpedanceExampleController::init(hardware_interface::RobotHW* robo
     "/stiffness", 20, &CartesianImpedanceExampleController::equilibriumStiffnessCallback, this,
     ros::TransportHints().reliable().tcpNoDelay());
 
+  sub_equilibrium_velocity_ = node_handle.subscribe(
+    "/equilibrium_velocity", 20, &CartesianImpedanceExampleController::equilibriumVelocityCallback, this,
+    ros::TransportHints().reliable().tcpNoDelay());
+
   pub_stiff_update_ = node_handle.advertise<dynamic_reconfigure::Config>(
     "/dynamic_reconfigure_compliance_param_node/parameter_updates", 5);
 
   pub_cartesian_pose_= node_handle.advertise<geometry_msgs::PoseStamped>("/cartesian_pose",1);
     
   pub_force_torque_= node_handle.advertise<geometry_msgs::WrenchStamped>("/force_torque_ext",1);
+
+
     
   std::string arm_id;
   if (!node_handle.getParam("arm_id", arm_id)) {
@@ -140,6 +146,7 @@ void CartesianImpedanceExampleController::starting(const ros::Time& /*time*/) {
   // set nullspace equilibrium configuration to initial q 
   q_d_nullspace_ = q_initial;
   force_torque_old.setZero();
+  vel_d.setZero();
   double time_old=ros::Time::now().toSec();
 }
 
@@ -214,6 +221,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   // compute error to desired pose
   // position error
   Eigen::Matrix<double, 6, 1> error;
+  Eigen::Matrix<double, 6, 1> error_vel;
   error.head(3) << position - position_d_;
 
   // orientation error
@@ -227,6 +235,8 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   // compute "orientation error"
   error.tail(3) << error_quaternion_angle_axis.axis() * error_quaternion_angle_axis.angle();
 
+  error_vel<< jacobian * dq;
+  error_vel.head(3)<< error_vel.head(3) - vel_d;
   // compute control
   // allocate variables
   Eigen::VectorXd tau_task(7), tau_nullspace(7), tau_d(7), null_vect(7), tau_joint_limit(7);
@@ -243,9 +253,11 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   null_vect(4)=(q_d_nullspace_(4) - q(4));
   null_vect(5)=(q_d_nullspace_(5) - q(5));
   null_vect(6)=(q_d_nullspace_(6) - q(6));
+
+
   // Cartesian PD control with damping ratio = 1
   tau_task << jacobian.transpose() *
-                  (-cartesian_stiffness_ * error -  cartesian_damping_ * (jacobian * dq)); //double critic damping
+                  (-cartesian_stiffness_ * error -  cartesian_damping_ * (error_vel)); //double critic damping
   // nullspace PD control with damping ratio = 1
   tau_nullspace << (Eigen::MatrixXd::Identity(7, 7) -
                     jacobian.transpose() * jacobian_transpose_pinv) *
@@ -267,7 +279,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   if (q(6)>2.8)      { tau_joint_limit(6)=-10; }
   if (q(6)<-2.8)     { tau_joint_limit(6)=+10; }
   // Desired torque
-  tau_d << tau_task + tau_nullspace + coriolis+ tau_joint_limit;
+  tau_d << tau_task + tau_nullspace + coriolis + tau_joint_limit;
   // Saturate torque rate to avoid discontinuities
   tau_d << saturateTorqueRate(tau_d, tau_J_d);
   for (size_t i = 0; i < 7; ++i) {
@@ -415,7 +427,9 @@ void CartesianImpedanceExampleController::equilibriumConfigurationCallback( cons
   }
   return;    
 }
-
+void CartesianImpedanceExampleController::equilibriumVelocityCallback( const std_msgs::TwistStampedConstPtr& velocity) {
+  vel_d << msg->twist.linear;
+}
 
 }  // namespace franka_example_controllers
 
