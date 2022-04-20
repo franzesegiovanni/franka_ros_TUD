@@ -13,7 +13,7 @@
 #include "std_msgs/MultiArrayLayout.h"
 #include "std_msgs/MultiArrayDimension.h"
 #include "std_msgs/Float32MultiArray.h"
-#include "std_msgs/TwistStamped.h"
+#include "geometry_msgs/TwistStamped.h"
 #include <hardware_interface/joint_command_interface.h>
 #include <hardware_interface/robot_hw.h>
 #include <dynamic_reconfigure/Config.h>
@@ -47,8 +47,8 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   std::unique_ptr<franka_hw::FrankaModelHandle> model_handle_;
   std::vector<hardware_interface::JointHandle> joint_handles_;
 
-  double nullspace_stiffness_{0.0};
-  double nullspace_stiffness_target_{0.0};
+  double nullspace_stiffness_{10.0};
+  double nullspace_stiffness_target_{10.0};
   double dt{0.001};
   double time_start;
   int alpha;
@@ -58,7 +58,7 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   Eigen::Matrix<double, 6, 6> cartesian_stiffness_;
   Eigen::Matrix<double, 6, 6> cartesian_damping_;
   Eigen::Matrix<double, 7, 1> q_d_nullspace_;
-  Eigen::Matrix<double, 3, 1> vel_d;
+  Eigen::Vector3d vel_d;
   Eigen::Matrix<double, 6, 6> cartesian_stiffness_target_;
   Eigen::Matrix<double, 6, 6> cartesian_damping_target_;
   Eigen::Matrix<double, 6, 1> force_torque;
@@ -84,7 +84,7 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
 
   // Velocity subscriber
   ros::Subscriber sub_equilibrium_velocity_;
-  void equilibriumVelocityCallback( const std_msgs::TwistStampedConstPtr& velocity);
+  void equilibriumVelocityCallback( const geometry_msgs::TwistStampedConstPtr& velocity);
 
   // Multi directional stiffness stiffnes 
   ros::Subscriber sub_stiffness_;

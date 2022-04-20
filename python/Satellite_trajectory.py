@@ -21,11 +21,11 @@ class LfD():
         self.goal_pub = rospy.Publisher('/equilibrium_pose', PoseStamped, queue_size=1)
         self.stiff_pub = rospy.Publisher('/stiffness', Float32MultiArray, queue_size=1)
         self.grip_pub = rospy.Publisher('/gripper_online', Float32, queue_size=0)
-        self.velocity_pub=rospy.Publisher('/equilibrium_vel', queue_size=1)
-        self.joint_sub=rospy.Publisher("/equilibrium_configuration", queue_size=1)
+        self.velocity_pub=rospy.Publisher('/equilibrium_vel', TwistStamped, queue_size=1)
+        self.configuration_pub=rospy.Publisher("/equilibrium_configuration",Float32MultiArray, queue_size=1)
     def ee_pos_callback(self, data):
-        self.curr_pos = np.array([data.pose.position.x, data.pose.postion.y, data.pose.position.z])
-        self.curr_ori =p.array([data.pose.orientation.x, data.pose.orientation.y, data.pose.orientation.z, data.pose.orientation.w])
+        self.curr_pos = np.array([data.pose.position.x, data.pose.position.y, data.pose.position.z])
+        self.curr_ori =np.array([data.pose.orientation.x, data.pose.orientation.y, data.pose.orientation.z, data.pose.orientation.w])
     
     def gripper_callback(self, data):
         self.width=data.position[7]+data.position[8]    
@@ -37,16 +37,27 @@ class LfD():
             recorded_traj=np.asarray(list(csv_reader))
 
             self.position=recorded_traj[:,1:4]
-            self.orientation=recorded_traj[:,7:]
+            self.orientation=-recorded_traj[:,7:]
             self.velelocity=recorded_traj[:,4:7]
-            self.configuration=[2.63,0.93,-2.93,-1.36,0.42,1.67,0.81]
+            self.configuration=np.array([2.63,0.93,-2.93,-1.36,0.42,1.67,0.81]).astype(np.float32)
     # control robot to desired goal position
     def go_to_start(self):
+        stiff_des = Float32MultiArray()
+
+
+        stiff_des.data = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 15.0]).astype(np.float32)
+        self.stiff_pub.publish(stiff_des)
+
+        joint_des=Float32MultiArray()
+
+        joint_des.data=self.configuration
+        self.configuration_pub.publish(joint_des)
+        time.sleep(5)
         start_pos = self.curr_pos
         start_rot  = self.curr_ori
         goal_pos=self.position[0]
         goal_rot=self.orientation[0]
-        # interpolate from start to goal with attractor distance of approx 1 cm
+        # interpolate from start to goal with attractor distance of approx 1 mm
         squared_dist = np.sum(np.subtract(start_pos, goal_pos)**2, axis=0)
         dist = np.sqrt(squared_dist)
         interp_dist = 0.001  # [m]a
@@ -77,12 +88,12 @@ class LfD():
         stiff_des = Float32MultiArray()
 
 
-        stiff_des.data = np.array([600.0, 600.0, 600.0, 30.0, 30.0, 30,0, 20.0]).astype(np.float32)
+        stiff_des.data = np.array([1000.0, 1000.0, 1000.0, 30.0, 30.0, 30.0, 0.0]).astype(np.float32)
         self.stiff_pub.publish(stiff_des)
 
         joint_des=Float32MultiArray()
 
-        joint_des.data= np.array([self.configuration]).astype(np.float32)
+        joint_des.data=self.configuration
         self.configuration_pub.publish(joint_des)
 
         for i in range(step_num):
@@ -104,12 +115,24 @@ class LfD():
             self.r.sleep()   
 
 
-    # ILoSA's main control loop
     def execute(self):
+        goal = PoseStamped()
+
+        goal.header.seq = 1
+        goal.header.stamp = rospy.Time.now()
+        goal.header.frame_id = "map"
+
+        goal.pose.position.x = self.position[0][0] 
+        goal.pose.position.y = self.position[0][1]
+        goal.pose.position.z = self.position[0][2]
+
+        goal.pose.orientation.x = self.orientation[0][1]
+        goal.pose.orientation.y = self.orientation[0][2]
+        goal.pose.orientation.z = self.orientation[0][3]
+        goal.pose.orientation.w = self.orientation[0][0]
         stiff_des = Float32MultiArray()
-        stiff_des.data = np.array([600.0, 600.0, 600.0, 30.0, 30.0, 30,0, 0.0]).astype(np.float32)
+        stiff_des.data = np.array([600.0, 600.0, 600.0, 30.0, 30.0, 30.0, 0.0]).astype(np.float32)
         self.stiff_pub.publish(stiff_des)
-        self.goal_pub.publish(goal)
         for i in range (np.shape(self.position)[0]):
             goal = PoseStamped()
 
@@ -135,6 +158,8 @@ class LfD():
 
             grip_command.data = 0.0#self.recorded_gripper[i][0]
 
+            self.goal_pub.publish(goal)
+            self.velocity_pub.publish(goal_vel)
             self.grip_pub.publish(grip_command) 
 
             self.r.sleep()
@@ -153,7 +178,7 @@ if __name__ == '__main__':
 #%%
     LfD.load_traj('trajectoryData1.csv')
 #%%
-    LfD.go_to_3d()
+    LfD.go_to_start()
 
 #%%
     LfD.execute()

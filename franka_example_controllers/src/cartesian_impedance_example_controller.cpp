@@ -254,14 +254,20 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   null_vect(5)=(q_d_nullspace_(5) - q(5));
   null_vect(6)=(q_d_nullspace_(6) - q(6));
 
+  null_vect(0)=std::min(std::max(null_vect(0),-0.5),0.5);
+  null_vect(1)=std::min(std::max(null_vect(1),-0.5),0.5);
+  null_vect(2)=std::min(std::max(null_vect(2),-0.5),0.5);
+  null_vect(3)=std::min(std::max(null_vect(3),-0.5),0.5);
+  null_vect(4)=std::min(std::max(null_vect(4),-0.5),0.5);
+  null_vect(5)=std::min(std::max(null_vect(5),-0.5),0.5);
+  null_vect(6)=std::min(std::max(null_vect(6),-0.5),0.5);
+
 
   // Cartesian PD control with damping ratio = 1
   tau_task << jacobian.transpose() *
                   (-cartesian_stiffness_ * error -  cartesian_damping_ * (error_vel)); //double critic damping
   // nullspace PD control with damping ratio = 1
-  tau_nullspace << (Eigen::MatrixXd::Identity(7, 7) -
-                    jacobian.transpose() * jacobian_transpose_pinv) *
-                       (nullspace_stiffness_ * null_vect -
+  tau_nullspace << (nullspace_stiffness_ * null_vect -
                         1*(2.0 * sqrt(nullspace_stiffness_)) * dq); //double critic damping
   tau_joint_limit.setZero();                      
   if (q(0)>2.85)     { tau_joint_limit(0)=-10; } 
@@ -272,12 +278,12 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   if (q(2)<-2.85)    { tau_joint_limit(2)=+10; }
   if (q(3)>-0.1)     { tau_joint_limit(3)=-10; }
   if (q(3)<-3.0)     { tau_joint_limit(3)=+10; }
-  if (q(4)>2.85)     { tau_joint_limit(4)=-10; }
-  if (q(4)<-2.85)    { tau_joint_limit(4)=+10; }
-  if (q(5)>3.7)      { tau_joint_limit(5)=-10; }  
-  if (q(5)<-0.1)     { tau_joint_limit(5)=+10; }
-  if (q(6)>2.8)      { tau_joint_limit(6)=-10; }
-  if (q(6)<-2.8)     { tau_joint_limit(6)=+10; }
+  if (q(4)>2.85)     { tau_joint_limit(4)=-2; }
+  if (q(4)<-2.85)    { tau_joint_limit(4)=+2; }
+  if (q(5)>3.7)      { tau_joint_limit(5)=-2; }  
+  if (q(5)<-0.1)     { tau_joint_limit(5)=+2; }
+  if (q(6)>2.8)      { tau_joint_limit(6)=-2; }
+  if (q(6)<-2.8)     { tau_joint_limit(6)=+2; }
   // Desired torque
   tau_d << tau_task + tau_nullspace + coriolis + tau_joint_limit;
   // Saturate torque rate to avoid discontinuities
@@ -427,8 +433,8 @@ void CartesianImpedanceExampleController::equilibriumConfigurationCallback( cons
   }
   return;    
 }
-void CartesianImpedanceExampleController::equilibriumVelocityCallback( const std_msgs::TwistStampedConstPtr& velocity) {
-  vel_d << msg->twist.linear;
+void CartesianImpedanceExampleController::equilibriumVelocityCallback( const geometry_msgs::TwistStampedConstPtr& velocity) {
+  vel_d << velocity->twist.linear.x, velocity->twist.linear.y, velocity->twist.linear.z;
 }
 
 }  // namespace franka_example_controllers
