@@ -12,21 +12,24 @@ class LfD():
     def __init__(self):
         self.recorded_traj = None
         self.recorded_gripper= None
+        self.gripper_width=0.035
     def start_ros(self):
         self.r=rospy.Rate(100)
         self.curr_pos=None
         self.width=None
+        self.grip_pub = rospy.Publisher('/gripper_online', Float32, queue_size=0)
         self.pos_sub= rospy.Subscriber("/cartesian_pose", PoseStamped, self.ee_pos_callback)
         self.gripper_sub= rospy.Subscriber("/joint_states", JointState, self.gripper_callback)
         self.goal_pub = rospy.Publisher('/equilibrium_pose', PoseStamped, queue_size=1)
         self.stiff_pub = rospy.Publisher('/stiffness', Float32MultiArray, queue_size=1)
-        self.grip_pub = rospy.Publisher('/gripper_online', Float32, queue_size=0)
         self.velocity_pub=rospy.Publisher('/equilibrium_vel', TwistStamped, queue_size=1)
         self.configuration_pub=rospy.Publisher("/equilibrium_configuration",Float32MultiArray, queue_size=1)
     def ee_pos_callback(self, data):
         self.curr_pos = np.array([data.pose.position.x, data.pose.position.y, data.pose.position.z])
         self.curr_ori =np.array([data.pose.orientation.x, data.pose.orientation.y, data.pose.orientation.z, data.pose.orientation.w])
-    
+        grip_command = Float32()
+        grip_command.data = self.gripper_width#self.recorded_gripper[i][0]
+        self.grip_pub.publish(grip_command) 
     def gripper_callback(self, data):
         self.width=data.position[7]+data.position[8]    
         #rospy.loginfo(self.width)
@@ -39,9 +42,12 @@ class LfD():
             self.position=recorded_traj[:,1:4]
             self.orientation=-recorded_traj[:,7:]
             self.velelocity=recorded_traj[:,4:7]
-            self.configuration=np.array([2.63,0.93,-2.93,-1.36,0.42,1.67,0.81]).astype(np.float32)
+            self.configuration=np.array([0.00, -1.41, 0.01, -1.74, -0.00, 1.90, -2.36]).astype(np.float32)
     # control robot to desired goal position
     def go_to_start(self):
+        grip_command = Float32()
+        grip_command.data = self.gripper_width#self.recorded_gripper[i][0]
+        self.grip_pub.publish(grip_command) 
         stiff_des = Float32MultiArray()
 
 
@@ -88,7 +94,7 @@ class LfD():
         stiff_des = Float32MultiArray()
 
 
-        stiff_des.data = np.array([1000.0, 1000.0, 1000.0, 30.0, 30.0, 30.0, 0.0]).astype(np.float32)
+        stiff_des.data = np.array([1000.0, 1000.0, 1000.0, 10.0, 10.0, 10.0, 0.0]).astype(np.float32)
         self.stiff_pub.publish(stiff_des)
 
         joint_des=Float32MultiArray()
@@ -112,6 +118,9 @@ class LfD():
             goal.pose.orientation.w = rot_w[i]
 
             self.goal_pub.publish(goal)
+            grip_command = Float32()
+            grip_command.data = self.gripper_width#self.recorded_gripper[i][0]
+            self.grip_pub.publish(grip_command) 
             self.r.sleep()   
 
 
@@ -131,12 +140,12 @@ class LfD():
         goal.pose.orientation.z = self.orientation[0][3]
         goal.pose.orientation.w = self.orientation[0][0]
         stiff_des = Float32MultiArray()
-        stiff_des.data = np.array([600.0, 600.0, 600.0, 30.0, 30.0, 30.0, 0.0]).astype(np.float32)
+        stiff_des.data = np.array([2000.0, 2000.0, 2000.0, 30.0, 30.0, 30.0, 0.0]).astype(np.float32)
         self.stiff_pub.publish(stiff_des)
         for i in range (np.shape(self.position)[0]):
             goal = PoseStamped()
 
-            goal.header.seq = 1
+            goal.header.seq = 1  
             goal.header.stamp = rospy.Time.now()
             goal.header.frame_id = "map"
 
@@ -156,7 +165,7 @@ class LfD():
 
             grip_command = Float32()
 
-            grip_command.data = 0.0#self.recorded_gripper[i][0]
+            grip_command.data = self.gripper_width#self.recorded_gripper[i][0]
 
             self.goal_pub.publish(goal)
             self.velocity_pub.publish(goal_vel)
@@ -176,7 +185,7 @@ if __name__ == '__main__':
 #%%
     LfD.start_ros()
 #%%
-    LfD.load_traj('trajectoryData1.csv')
+    LfD.load_traj('trajectoryData4.csv')
 #%%
     LfD.go_to_start()
 
