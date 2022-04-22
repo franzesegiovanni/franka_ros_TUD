@@ -24,11 +24,15 @@ bool JointImpedanceExampleController::init(hardware_interface::RobotHW* robot_hw
   sub_equilibrium_pose_ik = node_handle.subscribe(
         "/equilibrium_pose", 1, &JointImpedanceExampleController::equilibriumConfigurationIKCallback, this,
         ros::TransportHints().reliable().tcpNoDelay());
+  sub_equilibrium_config_ = node_handle.subscribe(
+      "/equilibrium_configuration", 20, &JointImpedanceExampleController::equilibriumConfigurationCallback, this,
+      ros::TransportHints().reliable().tcpNoDelay());
+
   pub_stiff_update_ = node_handle.advertise<dynamic_reconfigure::Config>(
     "/dynamic_reconfigure_compliance_param_node/parameter_updates", 5);
 
+  
   pub_cartesian_pose_= node_handle.advertise<geometry_msgs::PoseStamped>("/cartesian_pose",1);
-
   pub_force_torque_= node_handle.advertise<geometry_msgs::WrenchStamped>("/force_torque_ext",1);
 
   std::string arm_id;
@@ -95,21 +99,18 @@ bool JointImpedanceExampleController::init(hardware_interface::RobotHW* robot_hw
     }
   }
 
-  dynamic_reconfigure_compliance_param_node_ =
+  dynamic_reconfigure_compliance_joint_param_node_ =
       ros::NodeHandle("dynamic_reconfigure_compliance_param_node");
 
-  dynamic_server_compliance_param_.reset(
-      new dynamic_reconfigure::Server<franka_example_controllers::compliance_paramConfig>(
-          dynamic_reconfigure_compliance_param_node_));
-  dynamic_server_compliance_param_->setCallback(
-      boost::bind(&JointImpedanceExampleController::complianceParamCallback, this, _1, _2));
+  dynamic_server_compliance_joint_param_.reset(
+      new dynamic_reconfigure::Server<franka_example_controllers::compliance_joint_paramConfig>(
+          dynamic_reconfigure_compliance_joint_param_node_));
+
+  dynamic_server_compliance_joint_param_->setCallback(
+      boost::bind(&JointImpedanceExampleController::complianceJointParamCallback, this, _1, _2));
 
   position_d_.setZero();
   orientation_d_.coeffs() << 0.0, 0.0, 0.0, 1.0;
-  //position_d_target_.setZero();
-  //orientation_d_target_.coeffs() << 0.0, 0.0, 0.0, 1.0;
-  cartesian_stiffness_.setZero();
-  cartesian_damping_.setZero();
 
   stiff_.setZero();
 
@@ -121,20 +122,10 @@ void JointImpedanceExampleController::starting(const ros::Time& /*time*/) {
   // to initial configuration
   franka::RobotState initial_state = state_handle_->getRobotState();
   // get jacobian
-  std::array<double, 42> jacobian_array =
-      model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
-  // convert to eigen
-  Eigen::Map<Eigen::Matrix<double, 6, 7> > jacobian(jacobian_array.data());
   Eigen::Map<Eigen::Matrix<double, 7, 1> > dq_initial(initial_state.dq.data());
   Eigen::Map<Eigen::Matrix<double, 7, 1> > q_initial(initial_state.q.data());
   Eigen::Affine3d initial_transform(Eigen::Matrix4d::Map(initial_state.O_T_EE.data()));
-  // set equilibrium point to current state
-  position_d_ = initial_transform.translation(); // this allows the robot to start on the starting configuration
-  orientation_d_ = Eigen::Quaterniond(initial_transform.linear()); // this allows the robot to start on the starting configuration
-  //position_d_target_ = initial_transform.translation();
-  //orientation_d_target_ = Eigen::Quaterniond(initial_transform.linear());
-  // set nullspace equilibrium configuration to initial q
-  q_d_nullspace_ = q_initial;
+  q_d_ = q_initial;
   force_torque_old.setZero();
   double time_old=ros::Time::now().toSec();
 }
@@ -155,9 +146,7 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
   Eigen::Map<Eigen::Matrix<double, 7, 1> > q(robot_state.q.data());
   Eigen::Map<Eigen::Matrix<double, 7, 1> > dq(robot_state.dq.data());
   double time_=ros::Time::now().toSec();
-  //ddq=ddq+(dq-dq_old)/(time_-time_old);
-  //dq_old=dq;
-  //time_old=time_;
+
   Eigen::Map<Eigen::Matrix<double, 7, 1> > tau_J_d(  // NOLINT (readability-identifier-naming)
       robot_state.tau_J_d.data());
   Eigen::Map<Eigen::Matrix<double, 7, 1> > tau_ext(robot_state.tau_ext_hat_filtered.data());
@@ -168,6 +157,7 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
   Eigen::Matrix<double, 7, 1>  tau_f;
   Eigen::MatrixXd jacobian_transpose_pinv;
   Eigen::MatrixXd Null_mat;
+
   pseudoInverse(jacobian.transpose(), jacobian_transpose_pinv);
   tau_f(0) =  FI_11/(1+exp(-FI_21*(dq(0)+FI_31))) - TAU_F_CONST_1;
   tau_f(1) =  FI_12/(1+exp(-FI_22*(dq(1)+FI_32))) - TAU_F_CONST_2;
@@ -194,55 +184,25 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
     pub_force_torque_.publish(force_torque_msg);
     force_torque_old=force_torque/(filter_step_);
     force_torque.setZero();
-    //ddq.setZero();
     filter_step=0;
     }
-
-  geometry_msgs::PoseStamped pose_msg;
-  pose_msg.pose.position.x=position[0];
-  pose_msg.pose.position.y=position[1];
-  pose_msg.pose.position.z=position[2];
-  pose_msg.pose.orientation.x=orientation.x();
-  pose_msg.pose.orientation.y=orientation.y();
-  pose_msg.pose.orientation.z=orientation.z();
-  pose_msg.pose.orientation.w=orientation.w();
   pub_cartesian_pose_.publish(pose_msg);
   // compute error to desired pose
-  // position error
-  Eigen::Matrix<double, 6, 1> error;
-  error.head(3) << position - position_d_;
 
-  // orientation error
-  if (orientation_d_.coeffs().dot(orientation.coeffs()) < 0.0) {
-    orientation.coeffs() << -orientation.coeffs();
-  }
-  // "difference" quaternion
-  Eigen::Quaterniond error_quaternion(orientation * orientation_d_.inverse());
-  // convert to axis angle
-  Eigen::AngleAxisd error_quaternion_angle_axis(error_quaternion);
-  // compute "orientation error"
-  error.tail(3) << error_quaternion_angle_axis.axis() * error_quaternion_angle_axis.angle();
+  Eigen::VectorXd tau_joint(7), tau_d(7), error_vect(7), tau_joint_limit(7);
 
-  // compute control
-  // allocate variables
-  Eigen::VectorXd tau_task(7), tau_nullspace(7), tau_d(7), null_vect(7), tau_joint_limit(7);
 
-  // pseudoinverse for nullspace handling
-  // kinematic pseuoinverse
-
-  Null_mat=(Eigen::MatrixXd::Identity(7, 7) -jacobian.transpose() * jacobian_transpose_pinv);
-  null_vect.setZero();
-
-  null_vect(0)=std::max(-0.1,std::min((q_d_nullspace_(0) - q(0)),0.1));
-  null_vect(1)=std::max(-0.1,std::min((q_d_nullspace_(1) - q(1)),0.1));
-  null_vect(2)=std::max(-0.1,std::min((q_d_nullspace_(2) - q(2)),0.1));
-  null_vect(3)=std::max(-0.1,std::min((q_d_nullspace_(3) - q(3)),0.1));
-  null_vect(4)=std::max(-0.1,std::min((q_d_nullspace_(4) - q(4)),0.1));
-  null_vect(5)=std::max(-0.1,std::min((q_d_nullspace_(5) - q(5)),0.1));
-  null_vect(6)=std::max(-0.1,std::min((q_d_nullspace_(6) - q(6)),0.1));
+  error_vect.setZero();
+  error_vect(0)=std::max(-0.1,std::min((q_d_(0) - q(0)),0.1));
+  error_vect(1)=std::max(-0.1,std::min((q_d_(1) - q(1)),0.1));
+  error_vect(2)=std::max(-0.1,std::min((q_d_(2) - q(2)),0.1));
+  error_vect(3)=std::max(-0.1,std::min((q_d_(3) - q(3)),0.1));
+  error_vect(4)=std::max(-0.1,std::min((q_d_(4) - q(4)),0.1));
+  error_vect(5)=std::max(-0.1,std::min((q_d_(5) - q(5)),0.1));
+  error_vect(6)=std::max(-0.1,std::min((q_d_(6) - q(6)),0.1));
   // Joint PD control with damping ratio = 1
-  tau_task << jacobian.transpose() *
-                  (cartesian_stiffness_ * (jacobian * null_vect) -  cartesian_damping_ * (jacobian * dq)); //double critic damping
+  tau_joint << jacobian.transpose() *
+                  (joint_stiffness_target_ * (error_vect) -  joint_damping_target_ * (dq)); //double critic damping
   tau_joint_limit.setZero();
   if (q(0)>2.85)     { tau_joint_limit(0)=-10; }
   if (q(0)<-2.85)    { tau_joint_limit(0)=+10; }
@@ -259,18 +219,12 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
   if (q(6)>2.8)      { tau_joint_limit(6)=-10; }
   if (q(6)<-2.8)     { tau_joint_limit(6)=+10; }
   // Desired torque
-  tau_d << tau_task + coriolis + tau_joint_limit;
+  tau_d << tau_joint + coriolis + tau_joint_limit;
   // Saturate torque rate to avoid discontinuities
   tau_d << saturateTorqueRate(tau_d, tau_J_d);
   for (size_t i = 0; i < 7; ++i) {
     joint_handles_[i].setCommand(tau_d(i));
   }
-
-  cartesian_stiffness_ =cartesian_stiffness_target_;
-  cartesian_damping_   = cartesian_damping_target_;
-  nullspace_stiffness_ = nullspace_stiffness_target_;
-  Eigen::AngleAxisd aa_orientation_d(orientation_d_);
-  orientation_d_ = Eigen::Quaterniond(aa_orientation_d);
 }
 
 Eigen::Matrix<double, 7, 1> JointImpedanceExampleController::saturateTorqueRate(
@@ -295,95 +249,28 @@ void JointImpedanceExampleController::equilibriumStiffnessCallback(
     stiff_[i] = *it;
     i++;
   }
-
-  cartesian_stiffness_target_(0,0)=std::max(std::min(stiff_[0], float(4000.0)), float(0.0));
-  cartesian_stiffness_target_(1,1)=std::max(std::min(stiff_[1], float(4000.0)), float(0.0));
-  cartesian_stiffness_target_(2,2)=std::max(std::min(stiff_[2], float(4000.0)), float(0.0));
-
-  cartesian_damping_target_(0,0)=2.0 * sqrt(cartesian_stiffness_target_(0,0));
-  cartesian_damping_target_(1,1)=2.0 * sqrt(cartesian_stiffness_target_(1,1));
-  cartesian_damping_target_(2,2)=2.0 * sqrt(cartesian_stiffness_target_(2,2));
-
-  cartesian_stiffness_target_(3,3)=std::max(std::min(stiff_[3], float(50.0)), float(0.0));
-  cartesian_stiffness_target_(4,4)=std::max(std::min(stiff_[4], float(50.0)), float(0.0));
-  cartesian_stiffness_target_(5,5)=std::max(std::min(stiff_[5], float(50.0)), float(0.0));
-
-  cartesian_damping_target_(3,3)=2.0 * sqrt(cartesian_stiffness_target_(3,3));
-  cartesian_damping_target_(4,4)=2.0 * sqrt(cartesian_stiffness_target_(4,4));
-  cartesian_damping_target_(5,5)=2.0 * sqrt(cartesian_stiffness_target_(5,5));
-
-  nullspace_stiffness_target_= std::max(std::min(stiff_[6], float(20.0)), float(0.0));
-
-
-  dynamic_reconfigure::Config set_Kx;
-  dynamic_reconfigure::DoubleParameter param_X_double;
-  param_X_double.name = "translational_stiffness_X";
-  param_X_double.value = cartesian_stiffness_target_(0,0);
-  set_Kx.doubles = {param_X_double};
-  pub_stiff_update_.publish(set_Kx);
-
-  dynamic_reconfigure::Config set_Ky;
-  dynamic_reconfigure::DoubleParameter param_Y_double;
-  param_Y_double.name = "translational_stiffness_Y";
-  param_Y_double.value = cartesian_stiffness_target_(1,1);
-  set_Ky.doubles = {param_Y_double};
-  pub_stiff_update_.publish(set_Ky);
-
-  dynamic_reconfigure::Config set_Kz;
-  dynamic_reconfigure::DoubleParameter param_Z_double;
-  param_Z_double.name = "translational_stiffness_Z";
-  param_Z_double.value = cartesian_stiffness_target_(2,2);
-  set_Kz.doubles = {param_Z_double};
-  pub_stiff_update_.publish(set_Kz);
-
-  dynamic_reconfigure::Config set_K_alpha;
-  dynamic_reconfigure::DoubleParameter param_alpha_double;
-  param_alpha_double.name = "rotational_stiffness_X";
-  param_alpha_double.value = cartesian_stiffness_target_(3,3);
-  set_K_alpha.doubles = {param_alpha_double};
-  pub_stiff_update_.publish(set_K_alpha);
-
-  dynamic_reconfigure::Config set_K_beta;
-  dynamic_reconfigure::DoubleParameter param_beta_double;
-  param_beta_double.name = "rotational_stiffness_Y";
-  param_beta_double.value = cartesian_stiffness_target_(4,4);
-  set_K_beta.doubles = {param_beta_double};
-  pub_stiff_update_.publish(set_K_beta);
-
-  dynamic_reconfigure::Config set_K_gamma;
-  dynamic_reconfigure::DoubleParameter param_gamma_double;
-  param_gamma_double.name = "rotational_stiffness_Z";
-  param_gamma_double.value = cartesian_stiffness_target_(5,5);
-  set_K_gamma.doubles = {param_gamma_double};
-  pub_stiff_update_.publish(set_K_gamma);
-
-  dynamic_reconfigure::Config set_nullspace;
-  dynamic_reconfigure::DoubleParameter param_nullspace_double;
-  param_nullspace_double.name = "nullspace_stiffness";
-  param_nullspace_double.value = nullspace_stiffness_target_;
-  set_nullspace.doubles = {param_nullspace_double};
-  pub_stiff_update_.publish(set_nullspace);
-
+  for (int i = 0; i < 5; i++){
+  for (int j = 0; i < 5; i++) {
+  joint_stiffness_target_(i,j)=std::max(std::min(stiff_[i+j], float(4000.0)), float(0.0));
+  }
+    }
+  ROS_INFO_STREAM('Stiffness matrix is:',joint_stiff_target_)  
+  damping_ratio=config.damping_ratio;
+  calculateDamping()
 }
 
-void JointImpedanceExampleController::complianceParamCallback(
+void JointImpedanceExampleController::complianceJointParamCallback(
     franka_example_controllers::compliance_paramConfig& config,
     uint32_t /*level*/) {
-  cartesian_stiffness_target_.setIdentity();
-  cartesian_stiffness_target_(0,0)=config.translational_stiffness_X;
-  cartesian_stiffness_target_(1,1)=config.translational_stiffness_Y;
-  cartesian_stiffness_target_(2,2)=config.translational_stiffness_Z;
-  cartesian_stiffness_target_(3,3)=config.rotational_stiffness_X;
-  cartesian_stiffness_target_(4,4)=config.rotational_stiffness_Y;
-  cartesian_stiffness_target_(5,5)=config.rotational_stiffness_Z;
-
-  cartesian_damping_target_(0,0)=2.0 * sqrt(config.translational_stiffness_X);
-  cartesian_damping_target_(1,1)=2.0 * sqrt(config.translational_stiffness_Y);
-  cartesian_damping_target_(2,2)=2.0 * sqrt(config.translational_stiffness_Z);
-  cartesian_damping_target_(3,3)=2.0 * sqrt(config.rotational_stiffness_X);
-  cartesian_damping_target_(4,4)=2.0 * sqrt(config.rotational_stiffness_Y);
-  cartesian_damping_target_(5,5)=2.0 * sqrt(config.rotational_stiffness_Z);
-  nullspace_stiffness_target_ = config.nullspace_stiffness;
+  joint_stiffness_target_.setIdentity();
+  joint_stiffness_target_(0,0) = config.joint_1;
+  joint_stiffness_target_(1,1) = config.joint_2;
+  joint_stiffness_target_(2,2) = config.joint_3;
+  joint_stiffness_target_(3,3) = config.joint_4;
+  joint_stiffness_target_(4,4) = config.joint_5;
+  joint_stiffness_target_(5,5) = config.joint_6;
+  damping_ratio=config.damping_ratio;
+  calculateDamping()
 }
 
 void JointImpedanceExampleController::equilibriumConfigurationIKCallback( const geometry_msgs::PoseStampedConstPtr& msg) {
@@ -411,17 +298,68 @@ void JointImpedanceExampleController::equilibriumConfigurationIKCallback( const 
   for (int i = 0; i < 7; i++)
   {
       //_joints_result(i) = _position_joint_handles[i].getPosition();
-      q_d_nullspace_(i) = _joints_result(i);
+      q_d_(i) = _joints_result(i);
       //_iters[i] = 0;
   }
   //std::cout << q_d_nullspace_;
   //return;
 }
-else{std::cout << 'Inverse Kinematics not valid';};
+else{ ROS_INFO_STREAM('Inverse Kinematics not valid');};
 }
 
+void JointImpedanceExampleController::equilibriumConfigurationCallback( const std_msgs::Float32MultiArray::ConstPtr& joint) {
+  int i = 0;
+  for(std::vector<float>::const_iterator it = joint->data.begin(); it != joint->data.end(); ++it)
+  {
+    q_d_[i] = *it;
+    i++;
+  }
+  calculateDamping(q_d_);
+  return;    
+}
 
-}  // namespace franka_example_controllers
+void JointImpedanceExampleController::calculateDamping(std::array<double, 7>& goal ){
+
+  total_inertia_ = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  total_mass_ = 0.0;
+  F_x_Ctotal_ = {0.0, 0.0, 0.0};
+
+  mass_goal_ = model_handle_->getMass(goal, total_inertia_, total_mass_, F_x_Ctotal_);
+  Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
+
+  Eigen::MatrixXd M_inv = mass_goal.inverse();
+  Eigen::MatrixXd phi_mk = M_inv.llt().matrixU(); 
+
+  //K_.setIdentity();
+  Eigen::MatrixXd sigma_mk_hold = phi_mk * K_ * phi_mk.transpose();
+  Eigen::Matrix<double, 7, 1> sigma_mk;
+  Eigen::MatrixXd U, V;
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd;  
+  svd.compute(sigma_mk_hold, Eigen::ComputeFullU | Eigen::ComputeFullV);
+  U = svd.matrixU();
+  V = svd.matrixV(); 
+  sigma_mk = svd.singularValues();
+
+  Eigen::MatrixXd W = phi_mk.transpose() * U;
+
+  Eigen::Matrix<double, 7, 1> xi_n;
+  Eigen::Matrix<double, 7, 1> omega_n;
+  Eigen::Matrix<double, 7, 1> sigma_dn;
+
+  for(int k=0;k<7;++k){
+    xi_n(k, 0) = damping_ratio;
+    omega_n(k, 0) = sqrt(sigma_mk(k, 0));
+    sigma_dn(k, 0) = 2.0 * xi_n(k, 0) * omega_n(k, 0);
+  }
+  
+  Eigen::MatrixXd Sigma_d = sigma_dn.asDiagonal();
+
+  Eigen::Matrix<double, 7, 7> W_T = W.transpose();
+  D_ = W_T.inverse() * Sigma_d * W.inverse();
+  joint_damping_target_=D_;
+  // ROS_INFO_STREAM("D:" << D_);
+}
+  // namespace franka_example_controllers
 
 PLUGINLIB_EXPORT_CLASS(franka_example_controllers::JointImpedanceExampleController,
                        controller_interface::ControllerBase)
