@@ -10,6 +10,8 @@
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
 #include "pseudo_inversion.h"
+#include <franka_hw/franka_model_interface.h>
+#include <franka_hw/franka_state_interface.h>
 namespace franka_example_controllers {
 
 bool JointImpedanceExampleController::init(hardware_interface::RobotHW* robot_hw,
@@ -186,6 +188,15 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
     force_torque.setZero();
     filter_step=0;
     }
+  geometry_msgs::PoseStamped pose_msg;
+  pose_msg.pose.position.x=position[0];
+  pose_msg.pose.position.y=position[1];
+  pose_msg.pose.position.z=position[2];
+  pose_msg.pose.orientation.x=orientation.x();
+  pose_msg.pose.orientation.y=orientation.y();
+  pose_msg.pose.orientation.z=orientation.z();
+  pose_msg.pose.orientation.w=orientation.w();
+  pub_cartesian_pose_.publish(pose_msg);
   pub_cartesian_pose_.publish(pose_msg);
   // compute error to desired pose
 
@@ -193,16 +204,21 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
 
 
   error_vect.setZero();
-  error_vect(0)=std::max(-0.1,std::min((q_d_(0) - q(0)),0.1));
-  error_vect(1)=std::max(-0.1,std::min((q_d_(1) - q(1)),0.1));
-  error_vect(2)=std::max(-0.1,std::min((q_d_(2) - q(2)),0.1));
-  error_vect(3)=std::max(-0.1,std::min((q_d_(3) - q(3)),0.1));
-  error_vect(4)=std::max(-0.1,std::min((q_d_(4) - q(4)),0.1));
-  error_vect(5)=std::max(-0.1,std::min((q_d_(5) - q(5)),0.1));
-  error_vect(6)=std::max(-0.1,std::min((q_d_(6) - q(6)),0.1));
-  // Joint PD control with damping ratio = 1
-  tau_joint << jacobian.transpose() *
-                  (joint_stiffness_target_ * (error_vect) -  joint_damping_target_ * (dq)); //double critic damping
+  // error_vect(0)=std::max(-0.1,std::min((q_d_(0) - q(0)),0.1));
+  // error_vect(1)=std::max(-0.1,std::min((q_d_(1) - q(1)),0.1));
+  // error_vect(2)=std::max(-0.1,std::min((q_d_(2) - q(2)),0.1));
+  // error_vect(3)=std::max(-0.1,std::min((q_d_(3) - q(3)),0.1));
+  // error_vect(4)=std::max(-0.1,std::min((q_d_(4) - q(4)),0.1));
+  // error_vect(5)=std::max(-0.1,std::min((q_d_(5) - q(5)),0.1));
+  // error_vect(6)=std::max(-0.1,std::min((q_d_(6) - q(6)),0.1));
+  error_vect(0)=(q_d_(0) - q(0));
+  error_vect(1)=(q_d_(1) - q(1));
+  error_vect(2)=(q_d_(2) - q(2));
+  error_vect(3)=(q_d_(3) - q(3));
+  error_vect(4)=(q_d_(4) - q(4));
+  error_vect(5)=(q_d_(5) - q(5));
+  error_vect(6)=(q_d_(6) - q(6));
+  tau_joint << joint_stiffness_target_ * (error_vect) -  joint_damping_target_ * (dq); //double critic damping
   tau_joint_limit.setZero();
   if (q(0)>2.85)     { tau_joint_limit(0)=-10; }
   if (q(0)<-2.85)    { tau_joint_limit(0)=+10; }
@@ -254,14 +270,12 @@ void JointImpedanceExampleController::equilibriumStiffnessCallback(
   joint_stiffness_target_(i,j)=std::max(std::min(stiff_[i+j], float(4000.0)), float(0.0));
   }
     }
-  ROS_INFO_STREAM('Stiffness matrix is:',joint_stiff_target_)  
-  damping_ratio=config.damping_ratio;
-  calculateDamping()
+  ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);  
+  calculateDamping(q_d_);
 }
 
 void JointImpedanceExampleController::complianceJointParamCallback(
-    franka_example_controllers::compliance_paramConfig& config,
-    uint32_t /*level*/) {
+    franka_example_controllers::compliance_joint_paramConfig& config, uint32_t /*level*/) {
   joint_stiffness_target_.setIdentity();
   joint_stiffness_target_(0,0) = config.joint_1;
   joint_stiffness_target_(1,1) = config.joint_2;
@@ -270,7 +284,7 @@ void JointImpedanceExampleController::complianceJointParamCallback(
   joint_stiffness_target_(4,4) = config.joint_5;
   joint_stiffness_target_(5,5) = config.joint_6;
   damping_ratio=config.damping_ratio;
-  calculateDamping()
+  calculateDamping(q_d_);
 }
 
 void JointImpedanceExampleController::equilibriumConfigurationIKCallback( const geometry_msgs::PoseStampedConstPtr& msg) {
@@ -304,7 +318,7 @@ void JointImpedanceExampleController::equilibriumConfigurationIKCallback( const 
   //std::cout << q_d_nullspace_;
   //return;
 }
-else{ ROS_INFO_STREAM('Inverse Kinematics not valid');};
+else{ ROS_INFO_STREAM("Inverse Kinematics not valid");};
 }
 
 void JointImpedanceExampleController::equilibriumConfigurationCallback( const std_msgs::Float32MultiArray::ConstPtr& joint) {
@@ -318,12 +332,18 @@ void JointImpedanceExampleController::equilibriumConfigurationCallback( const st
   return;    
 }
 
-void JointImpedanceExampleController::calculateDamping(std::array<double, 7>& goal ){
+void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 1>& goal_ ){
 
   total_inertia_ = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
   total_mass_ = 0.0;
   F_x_Ctotal_ = {0.0, 0.0, 0.0};
-
+  goal[0]=goal_(0);
+  goal[1]=goal_(1);
+  goal[2]=goal_(2);
+  goal[3]=goal_(3);
+  goal[4]=goal_(4);
+  goal[5]=goal_(5);
+  goal[7]=goal_(6);
   mass_goal_ = model_handle_->getMass(goal, total_inertia_, total_mass_, F_x_Ctotal_);
   Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
 
@@ -358,6 +378,7 @@ void JointImpedanceExampleController::calculateDamping(std::array<double, 7>& go
   D_ = W_T.inverse() * Sigma_d * W.inverse();
   joint_damping_target_=D_;
   // ROS_INFO_STREAM("D:" << D_);
+}
 }
   // namespace franka_example_controllers
 

@@ -55,6 +55,11 @@
         "thread": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp",
-        "bit": "cpp"
+        "bit": "cpp",
+        "strstream": "cpp",
+        "bitset": "cpp",
+        "list": "cpp",
+        "cfenv": "cpp",
+        "typeindex": "cpp"
     }
 }
