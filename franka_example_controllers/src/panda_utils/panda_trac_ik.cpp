@@ -7,8 +7,8 @@
 namespace franka_example_controllers
 {
 
-PandaTracIK::PandaTracIK() : _urdf_param_string("/robot_description"), _secs_timeout(0.005),
-                             _error(1e-6), _num_steps(10)
+PandaTracIK::PandaTracIK() : _urdf_param_string("/robot_description"), _secs_timeout(0.01),
+                             _error(1e-3), _num_steps(10)
 {
     std::string name = "panda";
     bool use_robot = true;
@@ -61,8 +61,15 @@ PandaTracIK::PandaTracIK() : _urdf_param_string("/robot_description"), _secs_tim
     }
 }
 
-KDL::JntArray PandaTracIK::perform_ik(const geometry_msgs::Pose &goto_pose)
+KDL::JntArray PandaTracIK::perform_ik(const geometry_msgs::Pose &goto_pose, const std::array<double, 7> &q_start)
 {
+    _nominal_joint_arr = std::make_shared<KDL::JntArray>(_chain.getNrOfJoints());
+
+    // nominal joint positions halfway between upper and lower limits
+    for (int j = 0; j < _nominal_joint_arr->data.size(); ++j)
+    {
+        _nominal_joint_arr->operator()(j) = q_start[j]; //use the current position for the calculation of the inverse kinematics
+    }
     // performs inverse kinematics on the given desired pose.
     int rc = -1;
     KDL::JntArray result;

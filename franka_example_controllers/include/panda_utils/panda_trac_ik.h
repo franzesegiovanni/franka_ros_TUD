@@ -49,7 +49,7 @@ public:
     ~PandaTracIK();
     // member that determines if the result of trying tracik 10 times produced successful result
     bool is_valid;
-    KDL::JntArray perform_ik(const geometry_msgs::Pose &goto_pose);
+    KDL::JntArray perform_ik(const geometry_msgs::Pose &goto_pose, const std::array<double, 7> &q_start);
 
 };
 

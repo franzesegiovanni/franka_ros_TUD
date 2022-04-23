@@ -61,6 +61,7 @@ class JointImpedanceExampleController : public controller_interface::MultiInterf
   Eigen::Matrix<double, 6, 1> force_torque;
   Eigen::Matrix<double, 6, 1> force_torque_old;
   Eigen::Matrix<float, 7, 1> stiff_;
+  std::array<double, 7> q_start_ik;
   Eigen::Vector3d position_d_;
   Eigen::Quaterniond orientation_d_;
   std::array<double,7> goal;//{0.0,0.0,0.0,0.0,0.0,0.0,0.0};  

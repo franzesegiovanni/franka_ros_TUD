@@ -265,13 +265,13 @@ void JointImpedanceExampleController::equilibriumStiffnessCallback(
     stiff_[i] = *it;
     i++;
   }
-  for (int i = 0; i < 5; i++){
-  for (int j = 0; i < 5; i++) {
+  for (int i = 0; i < 6; i++){
+  for (int j = 0; i < 6; i++) {
   joint_stiffness_target_(i,j)=std::max(std::min(stiff_[i+j], float(4000.0)), float(0.0));
   }
     }
   ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);  
-  calculateDamping(q_d_);
+  calculateDamping(q_d_, damping_ratio); //check what damping ratio is actually taking
 }
 
 void JointImpedanceExampleController::complianceJointParamCallback(
@@ -284,7 +284,7 @@ void JointImpedanceExampleController::complianceJointParamCallback(
   joint_stiffness_target_(4,4) = config.joint_5;
   joint_stiffness_target_(5,5) = config.joint_6;
   damping_ratio=config.damping_ratio;
-  calculateDamping(q_d_);
+  calculateDamping(q_d_, damping_ratio);
 }
 
 void JointImpedanceExampleController::equilibriumConfigurationIKCallback( const geometry_msgs::PoseStampedConstPtr& msg) {
@@ -305,7 +305,12 @@ void JointImpedanceExampleController::equilibriumConfigurationIKCallback( const 
   pose_msg_.orientation.w=orientation_d_.coeffs()[3];
   // use tracik to get joint positions from target pose
   //std::cout << pose_msg_;
-  KDL::JntArray ik_result = _panda_ik_service.perform_ik(pose_msg_);
+  franka::RobotState robot_state = state_handle_->getRobotState();
+  Eigen::Map<Eigen::Matrix<double, 7, 1> > q_curr(robot_state.q.data());
+  for (int i = 0; i < 7; i++) {
+    q_start_ik[i]=q_curr(i);
+  };
+  KDL::JntArray ik_result = _panda_ik_service.perform_ik(pose_msg_, q_start_ik);
   _joints_result = (_panda_ik_service.is_valid) ? ik_result : _joints_result;
   _joints_result.resize(7);
   if (_panda_ik_service.is_valid) {
@@ -332,7 +337,7 @@ void JointImpedanceExampleController::equilibriumConfigurationCallback( const st
   return;    
 }
 
-void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 1>& goal_ ){
+void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 1>& goal_ , double& damping_ratio ){
 
   total_inertia_ = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
   total_mass_ = 0.0;
@@ -343,7 +348,7 @@ void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 
   goal[3]=goal_(3);
   goal[4]=goal_(4);
   goal[5]=goal_(5);
-  goal[7]=goal_(6);
+  goal[6]=goal_(6);
   mass_goal_ = model_handle_->getMass(goal, total_inertia_, total_mass_, F_x_Ctotal_);
   Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
 
@@ -367,7 +372,7 @@ void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 
   Eigen::Matrix<double, 7, 1> sigma_dn;
 
   for(int k=0;k<7;++k){
-    xi_n(k, 0) = damping_ratio;
+    xi_n(k, 0) = damping_ratio; //be care that this variable is actually not updated 
     omega_n(k, 0) = sqrt(sigma_mk(k, 0));
     sigma_dn(k, 0) = 2.0 * xi_n(k, 0) * omega_n(k, 0);
   }

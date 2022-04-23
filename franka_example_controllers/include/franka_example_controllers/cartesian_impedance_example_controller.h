@@ -65,7 +65,10 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   Eigen::Matrix<float, 7, 1> stiff_;
   Eigen::Vector3d position_d_;
   Eigen::Quaterniond orientation_d_;
-
+  std::array<double, 7> q_start_ik;
+  std::array<double, 7> q_max{2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973};
+  std::array<double, 7> q_min{-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973};
+  double joint_limit_tollerance{0.05}; //three degreess
   // Dynamic reconfigure
   std::unique_ptr<dynamic_reconfigure::Server<franka_example_controllers::compliance_paramConfig>>
       dynamic_server_compliance_param_;
@@ -99,6 +102,8 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
 
   hardware_interface::PositionJointInterface *_position_joint_interface;
   std::vector<hardware_interface::JointHandle> _position_joint_handles;
+
+  void calculateDamping(Eigen::Matrix<double, 7, 1>& goal, double& damping_ratio );
 
 
 
