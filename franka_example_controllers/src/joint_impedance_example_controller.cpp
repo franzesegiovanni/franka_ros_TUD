@@ -265,13 +265,15 @@ void JointImpedanceExampleController::equilibriumStiffnessCallback(
     stiff_[i] = *it;
     i++;
   }
-  for (int i = 0; i < 6; i++){
-  for (int j = 0; i < 6; i++) {
-  joint_stiffness_target_(i,j)=std::max(std::min(stiff_[i+j], float(4000.0)), float(0.0));
+  for (int i = 0; i < 7; i++){
+  for (int j = 0; i < 7; i++) {
+  joint_stiffness_target_(i,j)=std::max(std::min(stiff_[i+j], float(100.0)), float(0.0));
   }
-    }
+  }
+
   ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);  
-  calculateDamping(q_d_, damping_ratio); //check what damping ratio is actually taking
+  calculateDamping(q_d_); //check what damping ratio is actually taking
+  ROS_INFO_STREAM("Damping matrix is:" << joint_damping_target_);
 }
 
 void JointImpedanceExampleController::complianceJointParamCallback(
@@ -284,9 +286,10 @@ void JointImpedanceExampleController::complianceJointParamCallback(
   joint_stiffness_target_(4,4) = config.joint_5;
   joint_stiffness_target_(5,5) = config.joint_6;
   damping_ratio=config.damping_ratio;
-  calculateDamping(q_d_, damping_ratio);
+  calculateDamping(q_d_);
 }
 
+// This Callback allows you to ask for a pose and translate it into desired joint  using an inverke kinematics
 void JointImpedanceExampleController::equilibriumConfigurationIKCallback( const geometry_msgs::PoseStampedConstPtr& msg) {
   geometry_msgs::Pose pose_msg_;
   position_d_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
@@ -320,6 +323,7 @@ void JointImpedanceExampleController::equilibriumConfigurationIKCallback( const 
       q_d_(i) = _joints_result(i);
       //_iters[i] = 0;
   }
+  calculateDamping(q_d_);
   //std::cout << q_d_nullspace_;
   //return;
 }
@@ -337,11 +341,11 @@ void JointImpedanceExampleController::equilibriumConfigurationCallback( const st
   return;    
 }
 
-void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 1>& goal_ , double& damping_ratio ){
+void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 1>& goal_){
 
-  total_inertia_ = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-  total_mass_ = 0.0;
-  F_x_Ctotal_ = {0.0, 0.0, 0.0};
+  // total_inertia_ = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  // total_mass_ = 0.0;
+  // F_x_Ctotal_ = {0.0, 0.0, 0.0};
   goal[0]=goal_(0);
   goal[1]=goal_(1);
   goal[2]=goal_(2);
@@ -352,10 +356,11 @@ void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 
   mass_goal_ = model_handle_->getMass(goal, total_inertia_, total_mass_, F_x_Ctotal_);
   Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
 
-  Eigen::MatrixXd M_inv = mass_goal.inverse();
+  Eigen::MatrixXd M_inv = mass_goal.inverse(););
   Eigen::MatrixXd phi_mk = M_inv.llt().matrixU(); 
 
   //K_.setIdentity();
+  K_=joint_stiffness_target_;
   Eigen::MatrixXd sigma_mk_hold = phi_mk * K_ * phi_mk.transpose();
   Eigen::Matrix<double, 7, 1> sigma_mk;
   Eigen::MatrixXd U, V;
@@ -389,3 +394,4 @@ void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 
 
 PLUGINLIB_EXPORT_CLASS(franka_example_controllers::JointImpedanceExampleController,
                        controller_interface::ControllerBase)
+);

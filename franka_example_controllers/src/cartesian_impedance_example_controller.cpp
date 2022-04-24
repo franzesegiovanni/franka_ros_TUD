@@ -286,6 +286,26 @@ Eigen::Matrix<double, 7, 1> CartesianImpedanceExampleController::saturateTorqueR
   return tau_d_saturated;
 }
 
+void CartesianImpedanceExampleController::equilibriumStiffnessCallback(
+    const std_msgs::Float32MultiArray::ConstPtr& stiffness_){
+
+  int i = 0;
+  // print all the remaining numbers
+  for(std::vector<float>::const_iterator it = stiffness_->data.begin(); it != stiffness_->data.end(); ++it)
+  {
+    stiff_[i] = *it;
+    i++;
+  }
+  for (int i = 0; i < 6; i++){
+  for (int j = 0; i < 6; i++) {
+  cartesian_stiffness_target_(i,j)=std::max(std::min(stiff_[i+j], float(4000.0)), float(0.0));
+  }
+    }
+  ROS_INFO_STREAM("Stiffness matrix is:" << cartesian_stiffness_target_);  
+  calculateDamping(q_d_); 
+  ROS_INFO_STREAM("Damping matrix is:" << cartesian_damping_target_);
+}
+
 void CartesianImpedanceExampleController::complianceParamCallback(
     franka_example_controllers::compliance_paramConfig& config,
     uint32_t /*level*/) {
@@ -296,14 +316,9 @@ void CartesianImpedanceExampleController::complianceParamCallback(
   cartesian_stiffness_target_(3,3)=config.rotational_stiffness_X;
   cartesian_stiffness_target_(4,4)=config.rotational_stiffness_Y;
   cartesian_stiffness_target_(5,5)=config.rotational_stiffness_Z;
-
-  cartesian_damping_target_(0,0)=2.0 * sqrt(config.translational_stiffness_X);
-  cartesian_damping_target_(1,1)=2.0 * sqrt(config.translational_stiffness_Y);
-  cartesian_damping_target_(2,2)=2.0 * sqrt(config.translational_stiffness_Z);
-  cartesian_damping_target_(3,3)=2.0 * sqrt(config.rotational_stiffness_X);
-  cartesian_damping_target_(4,4)=2.0 * sqrt(config.rotational_stiffness_Y);
-  cartesian_damping_target_(5,5)=2.0 * sqrt(config.rotational_stiffness_Z);
+  damping_ratio=config.damping_ratio;
   nullspace_stiffness_target_ = config.nullspace_stiffness;
+  calculateDamping(q_d_);
 }
 
 
@@ -317,6 +332,33 @@ void CartesianImpedanceExampleController::equilibriumPoseCallback(
   if (last_orientation_d_.coeffs().dot(orientation_d_.coeffs()) < 0.0) {
     orientation_d_.coeffs() << -orientation_d_.coeffs();
 }
+  geometry_msgs::Pose pose_msg_;
+  pose_msg_.position.x=position_d_[0];
+  pose_msg_.position.y=position_d_[1];
+  pose_msg_.position.z=position_d_[2];
+  pose_msg_.orientation.x=orientation_d_.coeffs()[0];
+  pose_msg_.orientation.y=orientation_d_.coeffs()[1];
+  pose_msg_.orientation.z=orientation_d_.coeffs()[2];
+  pose_msg_.orientation.w=orientation_d_.coeffs()[3];
+  franka::RobotState robot_state = state_handle_->getRobotState();
+  Eigen::Map<Eigen::Matrix<double, 7, 1> > q_curr(robot_state.q.data());
+  for (int i = 0; i < 7; i++) {
+    q_start_ik[i]=q_curr(i);
+  }
+  KDL::JntArray ik_result = _panda_ik_service.perform_ik(pose_msg_, q_start_ik);
+  // KDL::JntArray ik_result = _panda_ik_service.perform_ik(pose_msg_);
+  _joints_result = (_panda_ik_service.is_valid) ? ik_result : _joints_result;
+  _joints_result.resize(7);
+  if (_panda_ik_service.is_valid) {
+  for (int i = 0; i < 7; i++)
+  {
+      //_joints_result(i) = _position_joint_handles[i].getPosition();
+      q_d_(i) = _joints_result(i);
+      //_iters[i] = 0;
+  }
+  }
+calculateDamping(q_d_);  
+
 }
 void CartesianImpedanceExampleController::equilibriumConfigurationCallback( const std_msgs::Float32MultiArray::ConstPtr& joint) {
   int i = 0;
@@ -328,6 +370,7 @@ void CartesianImpedanceExampleController::equilibriumConfigurationCallback( cons
   return;
 }
 
+//This callback computes the nullspace configuration according to the current position of the robot and the cartesian goal. It depdent on the message that is give to the subscriber
 void CartesianImpedanceExampleController::equilibriumConfigurationIKCallback( const geometry_msgs::PoseStampedConstPtr& msg) {
   geometry_msgs::Pose pose_msg_;
   position_d_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
@@ -367,12 +410,8 @@ void CartesianImpedanceExampleController::equilibriumConfigurationIKCallback( co
 }
 }
 
-void CartesianImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 1>& goal_ , double& damping_ratio ){
-
-  total_inertia_ = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-  total_mass_ = 0.0;
-  F_x_Ctotal_ = {0.0, 0.0, 0.0};
-  for (int i = 0; i < 7; i =++) {
+void CartesianImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 1>& goal_ ){
+  for (int i = 0; i < 7; i++) {
   goal[i]=goal_(i);
 }
   mass_goal_ = model_handle_->getMass(goal, total_inertia_, total_mass_, F_x_Ctotal_);
@@ -380,12 +419,15 @@ void CartesianImpedanceExampleController::calculateDamping(Eigen::Matrix<double,
   Eigen::MatrixXd M_inv = mass_goal.inverse();
   //Compute the Jacobian of the goal 
   //Compute inv(J*M_inv*J_T)
-
-  Eigen::MatrixXd phi_mk = M_inv.llt().matrixU(); 
-
+  std::array<double, 42> jacobian_array =model_handle_-> getZeroJacobian (franka::Frame::kEndEffector, goal, F_T_EE, EE_T_K);
+  // convert to eigen
+  Eigen::Map<Eigen::Matrix<double, 6, 7> > J(jacobian_array.data()); 
+  Eigen::MatrixXd M_cart_inv=(J*M_inv*J.transpose());
+  Eigen::MatrixXd phi_mk = M_cart_inv.llt().matrixU();
   //K_.setIdentity();
+  K_=cartesian_stiffness_target_;
   Eigen::MatrixXd sigma_mk_hold = phi_mk * K_ * phi_mk.transpose();
-  Eigen::Matrix<double, 7, 1> sigma_mk;
+  Eigen::Matrix<double, 6, 1> sigma_mk;
   Eigen::MatrixXd U, V;
   Eigen::JacobiSVD<Eigen::MatrixXd> svd;  
   svd.compute(sigma_mk_hold, Eigen::ComputeFullU | Eigen::ComputeFullV);
@@ -395,11 +437,11 @@ void CartesianImpedanceExampleController::calculateDamping(Eigen::Matrix<double,
 
   Eigen::MatrixXd W = phi_mk.transpose() * U;
 
-  Eigen::Matrix<double, 7, 1> xi_n;
-  Eigen::Matrix<double, 7, 1> omega_n;
-  Eigen::Matrix<double, 7, 1> sigma_dn;
+  Eigen::Matrix<double, 6, 1> xi_n;
+  Eigen::Matrix<double, 6, 1> omega_n;
+  Eigen::Matrix<double, 6, 1> sigma_dn;
 
-  for(int k=0;k<7;++k){
+  for(int k=0;k<6;++k){
     xi_n(k, 0) = damping_ratio;
     omega_n(k, 0) = sqrt(sigma_mk(k, 0));
     sigma_dn(k, 0) = 2.0 * xi_n(k, 0) * omega_n(k, 0);
@@ -407,9 +449,9 @@ void CartesianImpedanceExampleController::calculateDamping(Eigen::Matrix<double,
   
   Eigen::MatrixXd Sigma_d = sigma_dn.asDiagonal();
 
-  Eigen::Matrix<double, 7, 7> W_T = W.transpose();
+  Eigen::Matrix<double, 6, 6> W_T = W.transpose();
   D_ = W_T.inverse() * Sigma_d * W.inverse();
-  joint_damping_target_=D_;
+  cartesian_damping_target_=D_;
   // ROS_INFO_STREAM("D:" << D_);
 }
 

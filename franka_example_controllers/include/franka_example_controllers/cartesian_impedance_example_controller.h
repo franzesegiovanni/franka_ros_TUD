@@ -55,6 +55,8 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   int filter_step{0};
   int filter_step_;
   const double delta_tau_max_{1.0};
+  double damping_ratio{1};
+
   Eigen::Matrix<double, 6, 6> cartesian_stiffness_;
   Eigen::Matrix<double, 6, 6> cartesian_damping_;
   Eigen::Matrix<double, 7, 1> q_d_nullspace_;
@@ -65,6 +67,25 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   Eigen::Matrix<float, 7, 1> stiff_;
   Eigen::Vector3d position_d_;
   Eigen::Quaterniond orientation_d_;
+  Eigen::Matrix<double, 7, 1> q_d_;
+
+  std::array<double,7> goal;//{0.0,0.0,0.0,0.0,0.0,0.0,0.0};  
+  Eigen::Matrix<double, 7, 1> goal_;
+  std::array<double, 49> mass_goal_;
+//   std::fill(mass_goal_.begin(), mass_goal_.end(), 0.0);
+  std::array<double, 9> total_inertia_; // dummie parameter to get goal mass matrix
+//   std::fill(total_inertia_.begin(), total_inertia_.end(), 0.0);
+  double total_mass_; // dummie parameter to get goal mass matrix
+//   std::fill(total_mass_.begin(), total_mass_.end(), 0.0);
+  std::array<double, 3> F_x_Ctotal_; // dummie parameter to get goal mass matrix
+//   std::fill(F_x_Ctotal_.begin(), F_x_Ctotal_.end(), 0.0);
+  std::array< double, 16 > F_T_EE;
+//   std::fill(F_T_EE.begin(), F_T_EE.end(), 0.0);
+  std::array< double, 16 > EE_T_K;
+//   std::fill(EE_T_K.begin(), EE_T_K.end(), 0.0);
+
+  Eigen::Matrix<double, 6, 6> K_;
+  Eigen::Matrix<double, 6, 6> D_;
   std::array<double, 7> q_start_ik;
   std::array<double, 7> q_max{2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973};
   std::array<double, 7> q_min{-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973};
@@ -103,7 +124,7 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   hardware_interface::PositionJointInterface *_position_joint_interface;
   std::vector<hardware_interface::JointHandle> _position_joint_handles;
 
-  void calculateDamping(Eigen::Matrix<double, 7, 1>& goal, double& damping_ratio );
+  void calculateDamping(Eigen::Matrix<double, 7, 1>& goal);
 
 
 
