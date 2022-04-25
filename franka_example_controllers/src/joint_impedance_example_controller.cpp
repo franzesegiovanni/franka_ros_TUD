@@ -235,7 +235,7 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
   if (q(6)>2.8)      { tau_joint_limit(6)=-10; }
   if (q(6)<-2.8)     { tau_joint_limit(6)=+10; }
   // Desired torque
-  tau_d << tau_joint + coriolis + tau_joint_limit;
+  tau_d << tau_joint + tau_joint_limit+tau_f;
   // Saturate torque rate to avoid discontinuities
   tau_d << saturateTorqueRate(tau_d, tau_J_d);
   for (size_t i = 0; i < 7; ++i) {
@@ -285,8 +285,13 @@ void JointImpedanceExampleController::complianceJointParamCallback(
   joint_stiffness_target_(3,3) = config.joint_4;
   joint_stiffness_target_(4,4) = config.joint_5;
   joint_stiffness_target_(5,5) = config.joint_6;
+  joint_stiffness_target_(6,6) = config.joint_7;
   damping_ratio=config.damping_ratio;
+  // for (int i = 0; i < 7; i++){ 
+  // joint_damping_target_(i,i)= damping_ratio*2* sqrt(joint_stiffness_target_(i,i));}
   calculateDamping(q_d_);
+  ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);  
+  ROS_INFO_STREAM("Damping matrix is:" << joint_damping_target_);
 }
 
 // This Callback allows you to ask for a pose and translate it into desired joint  using an inverke kinematics
@@ -346,6 +351,8 @@ void JointImpedanceExampleController::equilibriumConfigurationCallback( const st
     i++;
   }
   calculateDamping(q_d_damp);
+  ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);  
+  ROS_INFO_STREAM("Damping matrix is:" << joint_damping_target_);
   i = 0;
     for(std::vector<float>::const_iterator it = joint->data.begin(); it != joint->data.end(); ++it)
   {

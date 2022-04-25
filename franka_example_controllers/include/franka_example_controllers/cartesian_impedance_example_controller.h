@@ -47,21 +47,24 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   std::unique_ptr<franka_hw::FrankaModelHandle> model_handle_;
   std::vector<hardware_interface::JointHandle> joint_handles_;
 
-  double nullspace_stiffness_{0.0};
-  double nullspace_stiffness_target_{0.0};
   double dt{0.001};
   double time_old;
   int alpha;
   int filter_step{0};
   int filter_step_;
   const double delta_tau_max_{1.0};
-  double damping_ratio{1};
-
+  double damping_ratio_translation{1};
+  double damping_ratio_rotation{1};
+  double damping_ratio_nullspace{1};
   Eigen::Matrix<double, 6, 6> cartesian_stiffness_;
   Eigen::Matrix<double, 6, 6> cartesian_damping_;
+  Eigen::Matrix<double, 7, 7> nullspace_stiffness_;
+  Eigen::Matrix<double, 7, 7> nullspace_damping_;
   Eigen::Matrix<double, 7, 1> q_d_nullspace_;
   Eigen::Matrix<double, 6, 6> cartesian_stiffness_target_;
   Eigen::Matrix<double, 6, 6> cartesian_damping_target_;
+  Eigen::Matrix<double, 7, 7> nullspace_damping_target_;
+  Eigen::Matrix<double, 7, 7> nullspace_stiffness_target_;
   Eigen::Matrix<double, 6, 1> force_torque;
   Eigen::Matrix<double, 6, 1> force_torque_old;
   Eigen::Matrix<float, 7, 1> stiff_;
@@ -84,8 +87,6 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   std::array< double, 16 > EE_T_K;
 //   std::fill(EE_T_K.begin(), EE_T_K.end(), 0.0);
 
-  Eigen::Matrix<double, 6, 6> K_;
-  Eigen::Matrix<double, 6, 6> D_;
   std::array<double, 7> q_start_ik;
   std::array<double, 7> q_max={{2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973}};
   std::array<double, 7> q_min={{-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973}};
@@ -109,7 +110,7 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   // Equilibrium pose subscriber IK
   ros::Subscriber sub_equilibrium_pose_ik;
   //void equilibriumPoseCallback(const geometry_msgs::PoseStampedConstPtr& msg);
-  void equilibriumConfigurationIKCallback( const geometry_msgs::PoseStampedConstPtr& msg);
+  // void equilibriumConfigurationIKCallback( const geometry_msgs::PoseStampedConstPtr& msg);
   // Multi directional stiffness stiffnes
   ros::Subscriber sub_stiffness_;
   void equilibriumStiffnessCallback(const std_msgs::Float32MultiArray::ConstPtr& stiffness_);
@@ -125,6 +126,7 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   std::vector<hardware_interface::JointHandle> _position_joint_handles;
 
   void calculateDamping(Eigen::Matrix<double, 7, 1>& goal);
+  void calculateDamping_NullSpace(Eigen::Matrix<double, 7, 1>& goal);
 
 
 

@@ -27,9 +27,9 @@ bool CartesianImpedanceExampleController::init(hardware_interface::RobotHW* robo
   sub_stiffness_ = node_handle.subscribe(
     "/stiffness", 20, &CartesianImpedanceExampleController::equilibriumStiffnessCallback, this,
     ros::TransportHints().reliable().tcpNoDelay());
-  sub_equilibrium_pose_ik = node_handle.subscribe(
-        "/equilibrium_pose", 1, &CartesianImpedanceExampleController::equilibriumConfigurationIKCallback, this,
-        ros::TransportHints().reliable().tcpNoDelay());
+  // sub_equilibrium_pose_ik = node_handle.subscribe(
+  //       "/equilibrium_pose", 1, &CartesianImpedanceExampleController::equilibriumConfigurationIKCallback, this,
+  //       ros::TransportHints().reliable().tcpNoDelay());
   pub_stiff_update_ = node_handle.advertise<dynamic_reconfigure::Config>(
     "/dynamic_reconfigure_compliance_param_node/parameter_updates", 5);
 
@@ -144,6 +144,10 @@ void CartesianImpedanceExampleController::starting(const ros::Time& /*time*/) {
   q_d_= q_initial; //TODO check this
   force_torque_old.setZero();
   double time_old=ros::Time::now().toSec();
+  calculateDamping(q_d_);
+  ROS_INFO_STREAM("Damping matrix is:" << cartesian_damping_target_);
+  calculateDamping_NullSpace(q_d_);
+  ROS_INFO_STREAM("Nullspace Damping  matrix is:" << nullspace_damping_target_);
 }
 
 void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
@@ -254,23 +258,24 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   tau_nullspace << (Eigen::MatrixXd::Identity(7, 7) -
                     jacobian.transpose() * jacobian_transpose_pinv) *
                        (nullspace_stiffness_ * null_vect -
-                        1*(2.0 * sqrt(nullspace_stiffness_)) * dq); //double critic damping
+                        nullspace_damping_ * dq); //double critic damping
   tau_joint_limit.setZero();
   for (int i = 0; i <= 6; i++) {
       if (q(i)>q_max[i]-joint_limit_tollerance)     { tau_joint_limit(i)=-10; };
       if (q(i)<q_min[i]+joint_limit_tollerance)    { tau_joint_limit(i)=+10; };
   };
   // Desired torque
-  tau_d << tau_task + tau_nullspace + coriolis+ tau_joint_limit;
+  tau_d << tau_task + tau_nullspace + tau_joint_limit+tau_f ;
   // Saturate torque rate to avoid discontinuities
   tau_d << saturateTorqueRate(tau_d, tau_J_d);
   for (size_t i = 0; i < 7; ++i) {
     joint_handles_[i].setCommand(tau_d(i));
   }
-
+  //tau_d[6]=std::min(std::max(tau_d[6],-0.05),0.05);
   cartesian_stiffness_ =cartesian_stiffness_target_;
   cartesian_damping_ = cartesian_damping_target_;
   nullspace_stiffness_ = nullspace_stiffness_target_;
+  nullspace_damping_= nullspace_damping_target_;
   Eigen::AngleAxisd aa_orientation_d(orientation_d_);
   orientation_d_ = Eigen::Quaterniond(aa_orientation_d);
 }
@@ -284,6 +289,7 @@ Eigen::Matrix<double, 7, 1> CartesianImpedanceExampleController::saturateTorqueR
     tau_d_saturated[i] =
         tau_J_d[i] + std::max(std::min(difference, delta_tau_max_), -delta_tau_max_);
   }
+  //tau_d_saturated[6]=0.5*std::tanh(tau_d_saturated[6]);
   return tau_d_saturated;
 }
 
@@ -303,7 +309,8 @@ void CartesianImpedanceExampleController::equilibriumStiffnessCallback(
   }
     }
   ROS_INFO_STREAM("Stiffness matrix is:" << cartesian_stiffness_target_);  
-  calculateDamping(q_d_); 
+  calculateDamping(q_d_);
+  calculateDamping_NullSpace(q_d_); 
   ROS_INFO_STREAM("Damping matrix is:" << cartesian_damping_target_);
 }
 
@@ -317,11 +324,17 @@ void CartesianImpedanceExampleController::complianceParamCallback(
   cartesian_stiffness_target_(3,3)=config.rotational_stiffness_X;
   cartesian_stiffness_target_(4,4)=config.rotational_stiffness_Y;
   cartesian_stiffness_target_(5,5)=config.rotational_stiffness_Z;
-  damping_ratio=config.damping_ratio;
-  nullspace_stiffness_target_ = config.nullspace_stiffness;
+  damping_ratio_translation=config.damping_ratio_translation;
+  damping_ratio_rotation=config.damping_ratio_rotation;
+  damping_ratio_nullspace=config.damping_ratio_nullspace;
+  for (int i = 0; i < 7; i++){
+  nullspace_stiffness_target_(i,i) = config.nullspace_stiffness;}
   calculateDamping(q_d_);
+  calculateDamping_NullSpace(q_d_);
   ROS_INFO_STREAM("Stiffness matrix is:" << cartesian_stiffness_target_);  
   ROS_INFO_STREAM("Damping matrix is:" << cartesian_damping_target_);
+  ROS_INFO_STREAM("Nullspace Stiffness matrix is:" << nullspace_stiffness_target_);  
+  ROS_INFO_STREAM("Nullspace Damping matrix is:" << nullspace_damping_target_);
 }
 
 
@@ -361,7 +374,8 @@ void CartesianImpedanceExampleController::equilibriumPoseCallback(
       q_d_damp(i) = _joints_result(i);
       //_iters[i] = 0;
   }
-    calculateDamping(q_d_damp); // compute the damping before than send pose to the attractor
+  calculateDamping(q_d_damp); // compute the damping before than send pose to the attractor
+  calculateDamping_NullSpace(q_d_damp); // compute the damping before than send pose to the attractor
   ROS_INFO_STREAM("Stiffness matrix is:" << cartesian_stiffness_target_);  
   ROS_INFO_STREAM("Damping matrix is:" << cartesian_damping_target_);
   for (int i = 0; i < 7; i++)
@@ -436,26 +450,35 @@ void CartesianImpedanceExampleController::calculateDamping(Eigen::Matrix<double,
   for (int i = 0; i < 7; i++) {
   goal[i]=goal_(i);
 }
+  Eigen::Matrix<double, 6, 6> K_;
+  Eigen::Matrix<double, 6, 6> D_;
   mass_goal_ = model_handle_->getMass(goal, total_inertia_, total_mass_, F_x_Ctotal_);
   Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
   Eigen::MatrixXd M_inv = mass_goal.inverse();
+  // ROS_INFO_STREAM("M_inv:" << M_inv); 
   //Compute the Jacobian of the goal 
   //Compute inv(J*M_inv*J_T)
   std::array<double, 42> jacobian_array =model_handle_-> getZeroJacobian (franka::Frame::kEndEffector, goal, F_T_EE, EE_T_K);
   // convert to eigen
   Eigen::Map<Eigen::Matrix<double, 6, 7> > J(jacobian_array.data()); 
+   ROS_INFO_STREAM("J:" << J); 
   Eigen::MatrixXd M_cart_inv=(J*M_inv*J.transpose());
   Eigen::MatrixXd phi_mk = M_cart_inv.llt().matrixU();
+  //  ROS_INFO_STREAM("phi_mk:" << phi_mk); 
   //K_.setIdentity();
   K_=cartesian_stiffness_target_;
   Eigen::MatrixXd sigma_mk_hold = phi_mk * K_ * phi_mk.transpose();
   Eigen::Matrix<double, 6, 1> sigma_mk;
+  // ROS_INFO_STREAM("sigma_mk:" << sigma_mk); 
   Eigen::MatrixXd U, V;
   Eigen::JacobiSVD<Eigen::MatrixXd> svd;  
   svd.compute(sigma_mk_hold, Eigen::ComputeFullU | Eigen::ComputeFullV);
   U = svd.matrixU();
-  V = svd.matrixV(); 
+  V = svd.matrixV();
+  //ROS_INFO_STREAM("U:" << U); 
+  //ROS_INFO_STREAM("V:" << V);
   sigma_mk = svd.singularValues();
+  // ROS_INFO_STREAM("sigma_mk:" << sigma_mk); 
 
   Eigen::MatrixXd W = phi_mk.transpose() * U;
 
@@ -463,10 +486,15 @@ void CartesianImpedanceExampleController::calculateDamping(Eigen::Matrix<double,
   Eigen::Matrix<double, 6, 1> omega_n;
   Eigen::Matrix<double, 6, 1> sigma_dn;
 
-  for(int k=0;k<6;++k){
-    xi_n(k, 0) = damping_ratio;
+  for(int k=0;k<3;++k){
+    xi_n(k, 0) = damping_ratio_translation;
     omega_n(k, 0) = sqrt(sigma_mk(k, 0));
     sigma_dn(k, 0) = 2.0 * xi_n(k, 0) * omega_n(k, 0);
+  }
+  for(int k=3;k<6;++k){
+  xi_n(k, 0) = damping_ratio_rotation;
+  omega_n(k, 0) = sqrt(sigma_mk(k, 0));
+  sigma_dn(k, 0) = 2.0 * xi_n(k, 0) * omega_n(k, 0);
   }
   
   Eigen::MatrixXd Sigma_d = sigma_dn.asDiagonal();
@@ -477,6 +505,65 @@ void CartesianImpedanceExampleController::calculateDamping(Eigen::Matrix<double,
   // ROS_INFO_STREAM("D:" << D_);
 }
 
+void CartesianImpedanceExampleController::calculateDamping_NullSpace(Eigen::Matrix<double, 7, 1>& goal_ ){
+  for (int i = 0; i < 7; i++) {
+  goal[i]=goal_(i);
+}
+  mass_goal_ = model_handle_->getMass(goal, total_inertia_, total_mass_, F_x_Ctotal_);
+  Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
+  Eigen::Matrix<double, 7, 7> K_;
+  Eigen::Matrix<double, 7, 7> D_;
+  // ROS_INFO_STREAM("M_inv:" << M_inv); 
+  //Compute the Jacobian of the goal 
+  //Compute inv(J*M_inv*J_T)
+  std::array<double, 42> jacobian_array =model_handle_-> getZeroJacobian (franka::Frame::kEndEffector, goal, F_T_EE, EE_T_K);
+  // convert to eigen
+  Eigen::Map<Eigen::Matrix<double, 6, 7> > J(jacobian_array.data()); 
+  Eigen::Matrix<double, 7, 7> N;
+  Eigen::MatrixXd J_transpose_pinv;
+  pseudoInverse(J.transpose(), J_transpose_pinv);
+  N=(Eigen::MatrixXd::Identity(7, 7) -J.transpose() * J_transpose_pinv);
+  // ROS_INFO_STREAM("J:" << J); 
+  Eigen::Matrix<double, 7, 7> M_goal_nullspace; 
+  M_goal_nullspace = N* mass_goal * N.transpose();
+  Eigen::Matrix<double, 7, 7> Stiffness_nullspace;
+  Stiffness_nullspace=N* nullspace_stiffness_target_*N.transpose();
+  Eigen::MatrixXd M_inv = M_goal_nullspace.inverse();
+  Eigen::MatrixXd phi_mk = M_inv.llt().matrixU();
+  //  ROS_INFO_STREAM("phi_mk:" << phi_mk); 
+  K_.setIdentity();
+  K_=Stiffness_nullspace;
+  Eigen::MatrixXd sigma_mk_hold = phi_mk * K_ * phi_mk.transpose();
+  Eigen::Matrix<double, 7, 1> sigma_mk;
+  // ROS_INFO_STREAM("sigma_mk:" << sigma_mk); 
+  Eigen::MatrixXd U, V;
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd;  
+  svd.compute(sigma_mk_hold, Eigen::ComputeFullU | Eigen::ComputeFullV);
+  U = svd.matrixU();
+  V = svd.matrixV();
+  ROS_INFO_STREAM("U:" << U); 
+  ROS_INFO_STREAM("V:" << V);
+  sigma_mk = svd.singularValues();
+  // ROS_INFO_STREAM("sigma_mk:" << sigma_mk); 
+
+  Eigen::MatrixXd W = phi_mk.transpose() * U;
+
+  Eigen::Matrix<double, 7, 1> xi_n;
+  Eigen::Matrix<double, 7, 1> omega_n;
+  Eigen::Matrix<double, 7, 1> sigma_dn;
+
+  for(int k=0;k<7;++k){
+    xi_n(k, 0) = damping_ratio_nullspace;
+    omega_n(k, 0) = sqrt(sigma_mk(k, 0));
+    sigma_dn(k, 0) = 2.0 * xi_n(k, 0) * omega_n(k, 0);
+  }
+  Eigen::MatrixXd Sigma_d = sigma_dn.asDiagonal();
+
+  Eigen::Matrix<double, 7, 7> W_T = W.transpose();
+  D_ = W_T.inverse() * Sigma_d * W.inverse();
+  nullspace_damping_target_=D_;
+  // ROS_INFO_STREAM("D:" << D_);
+}
 
 }  // namespace franka_example_controllers
 
