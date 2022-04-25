@@ -68,7 +68,7 @@ class JointImpedanceExampleController : public controller_interface::MultiInterf
   Eigen::Matrix<double, 7, 1> goal_;
   std::array<double, 49> mass_goal_;
   std::array<double, 9> total_inertia_; // dummie parameter to get goal mass matrix
-  double total_mass_; // dummie parameter to get goal mass matrix
+  double total_mass_={0}; // dummie parameter to get goal mass matrix
   std::array<double, 3> F_x_Ctotal_; // dummie parameter to get goal mass matrix
 
   Eigen::Matrix<double, 7, 7> K_;

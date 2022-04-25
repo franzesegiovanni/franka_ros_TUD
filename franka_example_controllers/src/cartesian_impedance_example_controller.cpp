@@ -28,7 +28,7 @@ bool CartesianImpedanceExampleController::init(hardware_interface::RobotHW* robo
     "/stiffness", 20, &CartesianImpedanceExampleController::equilibriumStiffnessCallback, this,
     ros::TransportHints().reliable().tcpNoDelay());
   sub_equilibrium_pose_ik = node_handle.subscribe(
-        "/cartesian_pose", 1, &CartesianImpedanceExampleController::equilibriumConfigurationIKCallback, this,
+        "/equilibrium_pose", 1, &CartesianImpedanceExampleController::equilibriumConfigurationIKCallback, this,
         ros::TransportHints().reliable().tcpNoDelay());
   pub_stiff_update_ = node_handle.advertise<dynamic_reconfigure::Config>(
     "/dynamic_reconfigure_compliance_param_node/parameter_updates", 5);
@@ -141,6 +141,7 @@ void CartesianImpedanceExampleController::starting(const ros::Time& /*time*/) {
   //orientation_d_target_ = Eigen::Quaterniond(initial_transform.linear());
   // set nullspace equilibrium configuration to initial q
   q_d_nullspace_ = q_initial;
+  q_d_= q_initial; //TODO check this
   force_torque_old.setZero();
   double time_old=ros::Time::now().toSec();
 }
@@ -319,27 +320,32 @@ void CartesianImpedanceExampleController::complianceParamCallback(
   damping_ratio=config.damping_ratio;
   nullspace_stiffness_target_ = config.nullspace_stiffness;
   calculateDamping(q_d_);
+  ROS_INFO_STREAM("Stiffness matrix is:" << cartesian_stiffness_target_);  
+  ROS_INFO_STREAM("Damping matrix is:" << cartesian_damping_target_);
 }
 
 
 
 void CartesianImpedanceExampleController::equilibriumPoseCallback(
     const geometry_msgs::PoseStampedConstPtr& msg) {
-  position_d_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
+  Eigen::Vector3d position_d_ik;
+  Eigen::Quaterniond orientation_d_ik;
+  position_d_ik << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
   Eigen::Quaterniond last_orientation_d_(orientation_d_);
-  orientation_d_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
+  orientation_d_ik.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
       msg->pose.orientation.z, msg->pose.orientation.w;
-  if (last_orientation_d_.coeffs().dot(orientation_d_.coeffs()) < 0.0) {
-    orientation_d_.coeffs() << -orientation_d_.coeffs();
+  if (last_orientation_d_.coeffs().dot(orientation_d_ik.coeffs()) < 0.0) {
+    orientation_d_ik.coeffs() << -orientation_d_ik.coeffs();
 }
   geometry_msgs::Pose pose_msg_;
-  pose_msg_.position.x=position_d_[0];
-  pose_msg_.position.y=position_d_[1];
-  pose_msg_.position.z=position_d_[2];
-  pose_msg_.orientation.x=orientation_d_.coeffs()[0];
-  pose_msg_.orientation.y=orientation_d_.coeffs()[1];
-  pose_msg_.orientation.z=orientation_d_.coeffs()[2];
-  pose_msg_.orientation.w=orientation_d_.coeffs()[3];
+   Eigen::Matrix<double, 7, 1> q_d_damp;
+  pose_msg_.position.x=position_d_ik[0];
+  pose_msg_.position.y=position_d_ik[1];
+  pose_msg_.position.z=position_d_ik[2];
+  pose_msg_.orientation.x=orientation_d_ik.coeffs()[0];
+  pose_msg_.orientation.y=orientation_d_ik.coeffs()[1];
+  pose_msg_.orientation.z=orientation_d_ik.coeffs()[2];
+  pose_msg_.orientation.w=orientation_d_ik.coeffs()[3];
   franka::RobotState robot_state = state_handle_->getRobotState();
   Eigen::Map<Eigen::Matrix<double, 7, 1> > q_curr(robot_state.q.data());
   for (int i = 0; i < 7; i++) {
@@ -350,16 +356,32 @@ void CartesianImpedanceExampleController::equilibriumPoseCallback(
   _joints_result = (_panda_ik_service.is_valid) ? ik_result : _joints_result;
   _joints_result.resize(7);
   if (_panda_ik_service.is_valid) {
+      for (int i = 0; i < 7; i++)
+  {   //_joints_result(i) = _position_joint_handles[i].getPosition();
+      q_d_damp(i) = _joints_result(i);
+      //_iters[i] = 0;
+  }
+    calculateDamping(q_d_damp); // compute the damping before than send pose to the attractor
+  ROS_INFO_STREAM("Stiffness matrix is:" << cartesian_stiffness_target_);  
+  ROS_INFO_STREAM("Damping matrix is:" << cartesian_damping_target_);
   for (int i = 0; i < 7; i++)
   {
       //_joints_result(i) = _position_joint_handles[i].getPosition();
       q_d_(i) = _joints_result(i);
+      q_d_nullspace_(i) = _joints_result(i);
       //_iters[i] = 0;
   }
-  }
-calculateDamping(q_d_);  
-
+  //Publish the position in the cartesian space after all the matrices and jonit goal have been updated
+  position_d_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
+  Eigen::Quaterniond last_orientation_d_(orientation_d_);
+  orientation_d_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
+    msg->pose.orientation.z, msg->pose.orientation.w;
+  if (last_orientation_d_.coeffs().dot(orientation_d_.coeffs()) < 0.0) {
+    orientation_d_.coeffs() << -orientation_d_.coeffs();
+  }    
 }
+}
+
 void CartesianImpedanceExampleController::equilibriumConfigurationCallback( const std_msgs::Float32MultiArray::ConstPtr& joint) {
   int i = 0;
   for(std::vector<float>::const_iterator it = joint->data.begin(); it != joint->data.end(); ++it)
@@ -371,44 +393,44 @@ void CartesianImpedanceExampleController::equilibriumConfigurationCallback( cons
 }
 
 //This callback computes the nullspace configuration according to the current position of the robot and the cartesian goal. It depdent on the message that is give to the subscriber
-void CartesianImpedanceExampleController::equilibriumConfigurationIKCallback( const geometry_msgs::PoseStampedConstPtr& msg) {
-  geometry_msgs::Pose pose_msg_;
-  position_d_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
-  Eigen::Quaterniond last_orientation_d_(orientation_d_);
-  orientation_d_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
-      msg->pose.orientation.z, msg->pose.orientation.w;
-  if (last_orientation_d_.coeffs().dot(orientation_d_.coeffs()) < 0.0) {
-    orientation_d_.coeffs() << -orientation_d_.coeffs();
-}
-  pose_msg_.position.x=position_d_[0];
-  pose_msg_.position.y=position_d_[1];
-  pose_msg_.position.z=position_d_[2];
-  pose_msg_.orientation.x=orientation_d_.coeffs()[0];
-  pose_msg_.orientation.y=orientation_d_.coeffs()[1];
-  pose_msg_.orientation.z=orientation_d_.coeffs()[2];
-  pose_msg_.orientation.w=orientation_d_.coeffs()[3];
-  // use tracik to get joint positions from target pose
-  //std::cout << pose_msg_;
-  franka::RobotState robot_state = state_handle_->getRobotState();
-  Eigen::Map<Eigen::Matrix<double, 7, 1> > q_curr(robot_state.q.data());
-  for (int i = 0; i < 7; i++) {
-    q_start_ik[i]=q_curr(i);
-  }
-  KDL::JntArray ik_result = _panda_ik_service.perform_ik(pose_msg_, q_start_ik);
-  // KDL::JntArray ik_result = _panda_ik_service.perform_ik(pose_msg_);
-  _joints_result = (_panda_ik_service.is_valid) ? ik_result : _joints_result;
-  _joints_result.resize(7);
-  if (_panda_ik_service.is_valid) {
-  for (int i = 0; i < 7; i++)
-  {
-      //_joints_result(i) = _position_joint_handles[i].getPosition();
-      q_d_nullspace_(i) = _joints_result(i);
-      //_iters[i] = 0;
-  }
-  //std::cout << q_d_nullspace_;
-  //return;
-}
-}
+// void CartesianImpedanceExampleController::equilibriumConfigurationIKCallback( const geometry_msgs::PoseStampedConstPtr& msg) {
+//   geometry_msgs::Pose pose_msg_;
+//   position_d_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
+//   Eigen::Quaterniond last_orientation_d_(orientation_d_);
+//   orientation_d_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
+//       msg->pose.orientation.z, msg->pose.orientation.w;
+//   if (last_orientation_d_.coeffs().dot(orientation_d_.coeffs()) < 0.0) {
+//     orientation_d_.coeffs() << -orientation_d_.coeffs();s
+// }
+//   pose_msg_.position.x=position_d_[0];
+//   pose_msg_.position.y=position_d_[1];
+//   pose_msg_.position.z=position_d_[2];
+//   pose_msg_.orientation.x=orientation_d_.coeffs()[0];
+//   pose_msg_.orientation.y=orientation_d_.coeffs()[1];
+//   pose_msg_.orientation.z=orientation_d_.coeffs()[2];
+//   pose_msg_.orientation.w=orientation_d_.coeffs()[3];
+//   // use tracik to get joint positions from target pose
+//   //std::cout << pose_msg_;
+//   franka::RobotState robot_state = state_handle_->getRobotState();
+//   Eigen::Map<Eigen::Matrix<double, 7, 1> > q_curr(robot_state.q.data());
+//   for (int i = 0; i < 7; i++) {
+//     q_start_ik[i]=q_curr(i);
+//   }
+//   KDL::JntArray ik_result = _panda_ik_service.perform_ik(pose_msg_, q_start_ik);
+//   // KDL::JntArray ik_result = _panda_ik_service.perform_ik(pose_msg_);
+//   _joints_result = (_panda_ik_service.is_valid) ? ik_result : _joints_result;
+//   _joints_result.resize(7);
+//   if (_panda_ik_service.is_valid) {
+//   for (int i = 0; i < 7; i++)
+//   {
+//       //_joints_result(i) = _position_joint_handles[i].getPosition();
+//       q_d_nullspace_(i) = _joints_result(i);
+//       //_iters[i] = 0;
+//   }
+//   //std::cout << q_d_nullspace_;
+//   //return;
+// }
+// }
 
 void CartesianImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 1>& goal_ ){
   for (int i = 0; i < 7; i++) {

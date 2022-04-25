@@ -87,8 +87,8 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   Eigen::Matrix<double, 6, 6> K_;
   Eigen::Matrix<double, 6, 6> D_;
   std::array<double, 7> q_start_ik;
-  std::array<double, 7> q_max{2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973};
-  std::array<double, 7> q_min{-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973};
+  std::array<double, 7> q_max={{2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973}};
+  std::array<double, 7> q_min={{-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973}};
   double joint_limit_tollerance{0.05}; //three degreess
   // Dynamic reconfigure
   std::unique_ptr<dynamic_reconfigure::Server<franka_example_controllers::compliance_paramConfig>>

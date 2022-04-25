@@ -292,6 +292,7 @@ void JointImpedanceExampleController::complianceJointParamCallback(
 // This Callback allows you to ask for a pose and translate it into desired joint  using an inverke kinematics
 void JointImpedanceExampleController::equilibriumConfigurationIKCallback( const geometry_msgs::PoseStampedConstPtr& msg) {
   geometry_msgs::Pose pose_msg_;
+  Eigen::Matrix<double, 7, 1> q_d_damp;
   position_d_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
   Eigen::Quaterniond last_orientation_d_(orientation_d_);
   orientation_d_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
@@ -320,10 +321,16 @@ void JointImpedanceExampleController::equilibriumConfigurationIKCallback( const 
   for (int i = 0; i < 7; i++)
   {
       //_joints_result(i) = _position_joint_handles[i].getPosition();
+      q_d_damp(i) = _joints_result(i);
+      //_iters[i] = 0;
+  }
+  calculateDamping(q_d_damp);
+    for (int i = 0; i < 7; i++)
+  {
+      //_joints_result(i) = _position_joint_handles[i].getPosition();
       q_d_(i) = _joints_result(i);
       //_iters[i] = 0;
   }
-  calculateDamping(q_d_);
   //std::cout << q_d_nullspace_;
   //return;
 }
@@ -332,12 +339,19 @@ else{ ROS_INFO_STREAM("Inverse Kinematics not valid");};
 
 void JointImpedanceExampleController::equilibriumConfigurationCallback( const std_msgs::Float32MultiArray::ConstPtr& joint) {
   int i = 0;
+  Eigen::Matrix<double, 7, 1> q_d_damp;
   for(std::vector<float>::const_iterator it = joint->data.begin(); it != joint->data.end(); ++it)
+  {
+    q_d_damp[i] = *it;
+    i++;
+  }
+  calculateDamping(q_d_damp);
+  i = 0;
+    for(std::vector<float>::const_iterator it = joint->data.begin(); it != joint->data.end(); ++it)
   {
     q_d_[i] = *it;
     i++;
   }
-  calculateDamping(q_d_);
   return;    
 }
 
@@ -356,7 +370,7 @@ void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 
   mass_goal_ = model_handle_->getMass(goal, total_inertia_, total_mass_, F_x_Ctotal_);
   Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
 
-  Eigen::MatrixXd M_inv = mass_goal.inverse(););
+  Eigen::MatrixXd M_inv = mass_goal.inverse();
   Eigen::MatrixXd phi_mk = M_inv.llt().matrixU(); 
 
   //K_.setIdentity();
@@ -394,4 +408,3 @@ void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 
 
 PLUGINLIB_EXPORT_CLASS(franka_example_controllers::JointImpedanceExampleController,
                        controller_interface::ControllerBase)
-);
