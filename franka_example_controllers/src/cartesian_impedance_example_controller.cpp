@@ -525,9 +525,9 @@ void CartesianImpedanceExampleController::calculateDamping_NullSpace(Eigen::Matr
   N=(Eigen::MatrixXd::Identity(7, 7) -J.transpose() * J_transpose_pinv);
   // ROS_INFO_STREAM("J:" << J); 
   Eigen::Matrix<double, 7, 7> M_goal_nullspace; 
-  M_goal_nullspace = N* mass_goal * N.transpose();
+  M_goal_nullspace = mass_goal ;
   Eigen::Matrix<double, 7, 7> Stiffness_nullspace;
-  Stiffness_nullspace=N* nullspace_stiffness_target_*N.transpose();
+  Stiffness_nullspace=nullspace_stiffness_target_;
   Eigen::MatrixXd M_inv = M_goal_nullspace.inverse();
   Eigen::MatrixXd phi_mk = M_inv.llt().matrixU();
   //  ROS_INFO_STREAM("phi_mk:" << phi_mk); 
