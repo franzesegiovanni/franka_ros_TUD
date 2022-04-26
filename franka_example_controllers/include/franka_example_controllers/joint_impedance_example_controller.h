@@ -88,7 +88,7 @@ class JointImpedanceExampleController : public controller_interface::MultiInterf
 
   // Configuration pose subscriber
   ros::Subscriber sub_equilibrium_config_;
-  void equilibriumConfigurationCallback( const std_msgs::Float32MultiArray::ConstPtr& joint);
+  void equilibriumConfigurationCallback( const sensor_msgs::JointState::ConstPtr& joint);
 
 
   // Equilibrium pose subscriber IK
