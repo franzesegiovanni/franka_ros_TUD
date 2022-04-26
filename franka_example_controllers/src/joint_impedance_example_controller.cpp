@@ -342,10 +342,10 @@ void JointImpedanceExampleController::equilibriumConfigurationIKCallback( const 
 else{ ROS_INFO_STREAM("Inverse Kinematics not valid");};
 }
 
-void JointImpedanceExampleController::equilibriumConfigurationCallback( const std_msgs::Float32MultiArray::ConstPtr& joint) {
+void JointImpedanceExampleController::equilibriumConfigurationCallback( const sensor_msgs::JointState::ConstPtr& joint) {
   int i = 0;
   Eigen::Matrix<double, 7, 1> q_d_damp;
-  for(std::vector<float>::const_iterator it = joint->data.begin(); it != joint->data.end(); ++it)
+  for(std::vector<float>::const_iterator it = joint.position->data.begin(); it != joint.position->data.end(); ++it)
   {
     q_d_damp[i] = *it;
     i++;
@@ -354,7 +354,7 @@ void JointImpedanceExampleController::equilibriumConfigurationCallback( const st
   ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);  
   ROS_INFO_STREAM("Damping matrix is:" << joint_damping_target_);
   i = 0;
-    for(std::vector<float>::const_iterator it = joint->data.begin(); it != joint->data.end(); ++it)
+    for(std::vector<float>::const_iterator it = joint.position->data.begin(); it != joint.position->data.end(); ++it)
   {
     q_d_[i] = *it;
     i++;
