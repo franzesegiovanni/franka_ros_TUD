@@ -34,7 +34,6 @@ class LfD():
         self.listener.start()
     def gripper_callback(self, data):
         self.width =data.position[7]+data.position[8]
-        #rospy.loginfo(self.width)
     def joint_callback(self,data):
         self.curr_joint =data.position[0:7]      
 
@@ -56,10 +55,7 @@ class LfD():
         set_K.update_configuration({"joint_6": k_6})
         set_K.update_configuration({"joint_7": k_7}) 
 
-    def joint_rec_point(self):
-        #stiff_des = Float32MultiArray()
-        #stiff_des.data = np.array([0.0, 0.0, 0.0, 30.0, 30.0, 30.0, 20.0]).astype(np.float32)
-        #self.stiff_pub.publish(stiff_des) 
+    def joint_rec_point(self): 
         self.set_stiffness_joint(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         self.recorded_joint = self.curr_joint
         self.recorded_gripper= self.width
@@ -100,7 +96,6 @@ class LfD():
         start = self.curr_joint
         goal_=np.array([self.recorded_joint[0][0], self.recorded_joint[1][0], self.recorded_joint[2][0], self.recorded_joint[3][0], self.recorded_joint[4][0], self.recorded_joint[5][0], self.recorded_joint[6][0]])
         print("goal:", goal_)
-        # interpolate from start to goal with attractor distance of approx 1 cm
         squared_dist = np.sum(np.subtract(start, goal_)**2, axis=0)
         dist = np.sqrt(squared_dist)
         print("dist", dist)
@@ -133,6 +128,9 @@ class LfD():
             goal=JointState()
             goal.position=self.recorded_joint[:,i] 
             self.joint_pub.publish(goal)
+            grip_command = Float32()
+            grip_command.data = self.recorded_gripper[0,i]
+            self.grip_pub.publish(grip_command) 
             self.r.sleep()
 
     def execute_joints_points(self):
@@ -143,14 +141,16 @@ class LfD():
             goal.position=self.recorded_joint[:,i]
             print(self.recorded_joint[:,i]) 
             self.joint_pub.publish(goal)
+            grip_command = Float32()
+            grip_command.data = self.recorded_gripper[0,i]
+            self.grip_pub.publish(grip_command) 
             time.sleep(5)  
 
-    #def start_ros(self):
 #%%    
 LfD=LfD()
 
 #%%
-LfD.joint_rec_point()  # a new window should open for stopping the recording
+LfD.joint_rec_point() 
 
 #%%
 LfD.go_to_start_joint()
@@ -159,7 +159,7 @@ LfD.go_to_start_joint()
 LfD.execute_joints_points()
 
 #%%
-LfD.joint_rec()  # a new window should open for stopping the recording
+LfD.joint_rec() 
 
 #%%
 LfD.go_to_start_joint()

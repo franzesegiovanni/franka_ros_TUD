@@ -39,10 +39,8 @@ class LfD():
     def ee_pos_callback(self, data):
         self.curr_pos = np.array([data.pose.position.x, data.pose.position.y, data.pose.position.z])
         self.curr_ori = np.array([data.pose.orietation.x, data.pose.orietation.y, data.pose.orietation.z, data.pose.orietation.w])
-        #rospy.loginfo([data.x, data.y, data.z])
     def gripper_callback(self, data):
         self.width =data.position[7]+data.position[8]
-        #rospy.loginfo(self.width)
 
     def set_stiffness(self, k_t1, k_t2, k_t3,k_r1,k_r2,k_r3, k_ns):
 
@@ -73,12 +71,7 @@ class LfD():
             print('End of the demonstration')
   
     def cart_rec(self):
-        # trigger for starting the recording
         trigger = 0.05
-        # print("test pt 1")
-       # stiff_des = Float32MultiArray()
-       # stiff_des.data = np.array([0.0, 0.0, 0.0, 30.0, 30.0, 30.0, 20.0]).astype(np.float32)
-        #self.stiff_pub.publish(stiff_des) 
 
         init_pos = self.curr_pos
         init_ori = self.curr_ori
@@ -91,7 +84,6 @@ class LfD():
         self.recorded_ori = self.curr_ori
         self.recorded_joints = self.curr_joint
         self.recorded_gripper= self.width
-        # recorded_joint = joint_pos
         self.end=False
         while not(self.end):
             now = time.time()      
@@ -210,11 +202,10 @@ class LfD():
 
             self.r.sleep()                  
 
-    #def start_ros(self):
 #%%    
 LfD=LfD()
 #%%
-LfD.cart_rec_point()  # a new window should open for stopping the recording
+LfD.cart_rec_point()  
 
 #%%
 LfD.go_to_start_cart()
@@ -223,7 +214,7 @@ LfD.go_to_start_cart()
 LfD.execute_cart_points()
 
 #%%
-LfD.cart_rec()  # a new window should open for stopping the recording
+LfD.cart_rec() 
 
 #%%
 LfD.go_to_start_cart()
