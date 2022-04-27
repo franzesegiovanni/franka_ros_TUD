@@ -157,6 +157,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   std::array<double, 7> coriolis_array = model_handle_->getCoriolis();
   std::array<double, 49> mass_array = model_handle_->getMass();
   Eigen::Map<Eigen::Matrix<double, 7, 7> > mass(mass_array.data());
+  Eigen::MatrixXd M_curr_inv = mass.inverse();
   std::array<double, 42> jacobian_array =
       model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
 
@@ -179,6 +180,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   Eigen::Matrix<double, 7, 1>  tau_f;
   Eigen::MatrixXd jacobian_transpose_pinv;
   Eigen::MatrixXd Null_mat;
+  Eigen::MatrixXd Null_mat_dyn;
   pseudoInverse(jacobian.transpose(), jacobian_transpose_pinv);
   tau_f(0) =  FI_11/(1+exp(-FI_21*(dq(0)+FI_31))) - TAU_F_CONST_1;
   tau_f(1) =  FI_12/(1+exp(-FI_22*(dq(1)+FI_32))) - TAU_F_CONST_2;
@@ -242,8 +244,9 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   // kinematic pseuoinverse
 
   Null_mat=(Eigen::MatrixXd::Identity(7, 7) -jacobian.transpose() * jacobian_transpose_pinv);
+  Eigen::MatrixXd M_cart_inv=(jacobian*M_curr_inv*jacobian.transpose());
+  Null_mat_dyn= (Eigen::MatrixXd::Identity(7, 7) -jacobian.transpose() *M_cart_inv.inverse()* jacobian* M_curr_inv);
   null_vect.setZero();
-
   null_vect(0)=(q_d_nullspace_(0) - q(0));
   null_vect(1)=(q_d_nullspace_(1) - q(1));
   null_vect(2)=(q_d_nullspace_(2) - q(2));
@@ -255,10 +258,9 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   tau_task << jacobian.transpose() *
                   (-cartesian_stiffness_ * error -  cartesian_damping_ * (jacobian * dq)); //double critic damping
   // nullspace PD control with damping ratio = 1
-  tau_nullspace << (Eigen::MatrixXd::Identity(7, 7) -
-                    jacobian.transpose() * jacobian_transpose_pinv) *
+  tau_nullspace << Null_mat_dyn *
                        (nullspace_stiffness_ * null_vect -
-                        nullspace_damping_ * dq); //double critic damping
+                        nullspace_damping_ * dq); //critic damping
   tau_joint_limit.setZero();
   for (int i = 0; i <= 6; i++) {
       if (q(i)>q_max[i]-joint_limit_tollerance)     { tau_joint_limit(i)=-10; };

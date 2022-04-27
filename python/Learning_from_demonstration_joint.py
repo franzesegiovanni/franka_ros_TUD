@@ -143,7 +143,7 @@ class LfD():
             goal.position=self.recorded_joint[:,i]
             print(self.recorded_joint[:,i]) 
             self.joint_pub.publish(goal)
-            time.sleep(3)  
+            time.sleep(5)  
 
     #def start_ros(self):
 #%%    

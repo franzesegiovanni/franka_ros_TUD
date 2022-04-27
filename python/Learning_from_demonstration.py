@@ -24,21 +24,16 @@ class LfD():
         self.recorded_gripper= None
 
         self.pos_sub=rospy.Subscriber("/cartesian_pose", PoseStamped, self.ee_pos_callback)
-        self.gripper_sub=rospy.Subscriber("/joint_states", JointState, self.gripper_callback)
-        self.joints=rospy.Subscriber("/joint_states", JointState, self.joint_callback)  
+        self.gripper_sub=rospy.Subscriber("/joint_states", JointState, self.gripper_callback)  
         self.goal_pub = rospy.Publisher('/equilibrium_pose', PoseStamped, queue_size=0)
-        self.joint_pub = rospy.Publisher('/equilibrium_configuration', JointState , queue_size=0)
         self.grip_pub = rospy.Publisher('/gripper_online', Float32, queue_size=0)
         self.stiff_mat_pub_ = rospy.Publisher('/stiffness', Float32MultiArray, queue_size=0) #TODO check the name of this topic 
-        #self.stiff_diag_pub = rospy.Publisher('/stiffness', , queue_size=0) #TODO check the name of this topic 
         self.listener = Listener(on_press=self._on_press)
         self.listener.start()
     def _on_press(self, key):
         # This function runs on the background and checks if a keyboard key was pressed
         if key == KeyCode.from_char('e'):
             self.end = True        
-        if key == KeyCode.from_char('j'):
-            self.save_joint_position = True  
         if key == KeyCode.from_char('c'):
             self.save_cartesian_position = True    
     def ee_pos_callback(self, data):
@@ -48,10 +43,8 @@ class LfD():
     def gripper_callback(self, data):
         self.width =data.position[7]+data.position[8]
         #rospy.loginfo(self.width)
-    def joint_callback(self,data):
-        self.curr_joint =data.position[0:7]
 
-    def set_stiffness(k_t1, k_t2, k_t3,k_r1,k_r2,k_r3, k_ns):
+    def set_stiffness(self, k_t1, k_t2, k_t3,k_r1,k_r2,k_r3, k_ns):
 
         set_K = dynamic_reconfigure.client.Client('/dynamic_reconfigure_compliance_param_node', config_callback=None)
         set_K.update_configuration({"translational_stiffness_X": k_t1})
@@ -62,24 +55,14 @@ class LfD():
         set_K.update_configuration({"rotational_stiffness_Z": k_r3})
         set_K.update_configuration({"nullspace_stiffness": k_ns}) 
 
-    def record_point(self):
-        #stiff_des = Float32MultiArray()
-        #stiff_des.data = np.array([0.0, 0.0, 0.0, 30.0, 30.0, 30.0, 20.0]).astype(np.float32)
-        #self.stiff_pub.publish(stiff_des) 
+    def cart_rec_point(self):
+        self.set_stiffness(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
         self.recorded_cartesian = self.curr_pos
         self.recorded_orientation = self.curr_ori
-        self.recorded_joint = self.curr_joint
         self.recorded_gripper= self.width
 
         while self.end ==False:       
-            if  self.save_joint_position==True: 
-                self.recorded_joint = np.c_[self.recorded_joint, self.curr_joint]
-                self.recorded_gripper = np.c_[self.recorded_gripper, self.width]
-                print('Adding joint cartesian position')
-                time.sleep(0.5) 
-                self.save_joint_position==False
-
             if  self.save_cartesian_position==True: 
                 self.recorded_cartesian = np.c_[self.recorded_cartesian, self.curr_pos]
                 self.recorded_orientation = np.c_[self.recorded_orientation, self.curr_ori]
@@ -87,10 +70,9 @@ class LfD():
                 print('Adding cartesian position') 
                 time.sleep(0.5)
                 self.save_cartesian_position==False     
-
-            self.r.sleep()
+            print('End of the demonstration')
   
-    def traj_rec(self):
+    def cart_rec(self):
         # trigger for starting the recording
         trigger = 0.05
         # print("test pt 1")
@@ -110,15 +92,13 @@ class LfD():
         self.recorded_joints = self.curr_joint
         self.recorded_gripper= self.width
         # recorded_joint = joint_pos
-        key_pressed = False
-        while not key_pressed:
+        self.end=False
+        while not(self.end):
             now = time.time()      
 
             self.recorded_traj = np.c_[self.recorded_traj, self.curr_pos]
             self.recorded_ori = np.c_[self.recorded_ori, self.curr_ori]
             self.recorded_gripper = np.c_[self.recorded_gripper, self.width]
-            self.recorded_joint = np.c_[self.recorded_joints, self.curr_joint]
-
 
             self.r.sleep()
 
@@ -177,6 +157,33 @@ class LfD():
             self.r.sleep()   
 
     def execute_cart_points(self):
+        self.set_stiffness(200.0, 200.0, 200.0, 30.0, 30.0, 30.0, 10.0)
+        for i in range (self.recorded_traj.shape[1]):
+            goal = PoseStamped()
+
+            goal.header.seq = 1
+            goal.header.stamp = rospy.Time.now()
+            goal.header.frame_id = "map"
+
+            goal.pose.position.x = self.recorded_traj[0,i]
+            goal.pose.position.y = self.recorded_traj[1,i]
+            goal.pose.position.z = self.recorded_traj[2,i]
+
+            goal.pose.orientation.x = self.recorded_ori[0,i]
+            goal.pose.orientation.y = self.recorded_ori[1,i]
+            goal.pose.orientation.z = self.recorded_ori[2,i]
+            goal.pose.orientation.w = self.recorded_ori[3,i]
+
+            self.goal_pub.publish(goal)
+            
+            grip_command = Float32()
+            grip_command.data = self.recorded_gripper[0,i]
+            self.grip_pub.publish(grip_command) 
+
+            time.sleep(5) 
+
+    def execute_cart(self):
+        self.set_stiffness(200.0, 200.0, 200.0, 30.0, 30.0, 30.0, 10.0)
         for i in range (self.recorded_traj.shape[1]):
             goal = PoseStamped()
 
@@ -197,25 +204,32 @@ class LfD():
             
             grip_command = Float32()
 
-            grip_command.data = self.recorded_gripper[0][i]
+            grip_command.data = self.recorded_gripper[0,i]
 
             self.grip_pub.publish(grip_command) 
 
-            time.sleep(3)            
+            self.r.sleep()                  
 
     #def start_ros(self):
 #%%    
 LfD=LfD()
+#%%
+LfD.cart_rec_point()  # a new window should open for stopping the recording
 
 #%%
-        #LfD.start_ros()
-#%%
-input("Press Enter to start trajectory recording...")
-LfD.traj_rec()  # a new window should open for stopping the recording
+LfD.go_to_start_cart()
 
 #%%
-LfD.go_to_start()
+LfD.execute_cart_points()
 
 #%%
-        LfD.execute()
+LfD.cart_rec()  # a new window should open for stopping the recording
+
 #%%
+LfD.go_to_start_cart()
+
+#%%
+LfD.execute_cart()
+
+# %%
+
