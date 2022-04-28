@@ -27,14 +27,17 @@ bool CartesianImpedanceExampleController::init(hardware_interface::RobotHW* robo
   sub_stiffness_ = node_handle.subscribe(
     "/stiffness", 20, &CartesianImpedanceExampleController::equilibriumStiffnessCallback, this,
     ros::TransportHints().reliable().tcpNoDelay());
+  sub_stiffness_ = node_handle.subscribe(
+      "/vibration", 20, &CartesianImpedanceExampleController::equilibriumVibrationCallback, this,
+      ros::TransportHints().reliable().tcpNoDelay());
 
   pub_stiff_update_ = node_handle.advertise<dynamic_reconfigure::Config>(
     "/dynamic_reconfigure_compliance_param_node/parameter_updates", 5);
 
   pub_cartesian_pose_= node_handle.advertise<geometry_msgs::PoseStamped>("/cartesian_pose",1);
-    
+
   pub_force_torque_= node_handle.advertise<geometry_msgs::WrenchStamped>("/force_torque_ext",1);
-    
+
   std::string arm_id;
   if (!node_handle.getParam("arm_id", arm_id)) {
     ROS_ERROR_STREAM("CartesianImpedanceExampleController: Could not read parameter arm_id");
@@ -126,7 +129,7 @@ void CartesianImpedanceExampleController::starting(const ros::Time& /*time*/) {
   franka::RobotState initial_state = state_handle_->getRobotState();
   // get jacobian
   std::array<double, 42> jacobian_array =
-      model_handle_->getZeroJacobian(franka::Frame::kEndEffector);  
+      model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
   // convert to eigen
   Eigen::Map<Eigen::Matrix<double, 6, 7> > jacobian(jacobian_array.data());
   Eigen::Map<Eigen::Matrix<double, 7, 1> > dq_initial(initial_state.dq.data());
@@ -137,10 +140,11 @@ void CartesianImpedanceExampleController::starting(const ros::Time& /*time*/) {
   orientation_d_ = Eigen::Quaterniond(initial_transform.linear()); // this allows the robot to start on the starting configuration
   //position_d_target_ = initial_transform.translation();
   //orientation_d_target_ = Eigen::Quaterniond(initial_transform.linear());
-  // set nullspace equilibrium configuration to initial q 
+  // set nullspace equilibrium configuration to initial q
   q_d_nullspace_ = q_initial;
   force_torque_old.setZero();
   double time_old=ros::Time::now().toSec();
+  count_vibration=1000;
 }
 
 void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
@@ -151,7 +155,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   std::array<double, 49> mass_array = model_handle_->getMass();
   Eigen::Map<Eigen::Matrix<double, 7, 7> > mass(mass_array.data());
   std::array<double, 42> jacobian_array =
-      model_handle_->getZeroJacobian(franka::Frame::kEndEffector); 
+      model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
 
   // convert to Eigen
   Eigen::Map<Eigen::Matrix<double, 7, 1> > coriolis(coriolis_array.data());
@@ -187,7 +191,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   filter_step=filter_step+1;
   filter_step_=10;
   alpha=1;
-  if (filter_step==filter_step_){ 
+  if (filter_step==filter_step_){
     geometry_msgs::WrenchStamped force_torque_msg;
     force_torque_msg.wrench.force.x=force_torque_old[0]*(1-alpha)+force_torque[0]*alpha/(filter_step_);
     force_torque_msg.wrench.force.y=force_torque_old[1]*(1-alpha)+ force_torque[1]*alpha/(filter_step_);
@@ -201,7 +205,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
     //ddq.setZero();
     filter_step=0;
     }
-  
+
   geometry_msgs::PoseStamped pose_msg;
   pose_msg.pose.position.x=position[0];
   pose_msg.pose.position.y=position[1];
@@ -251,8 +255,8 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
                     jacobian.transpose() * jacobian_transpose_pinv) *
                        (nullspace_stiffness_ * null_vect -
                         1*(2.0 * sqrt(nullspace_stiffness_)) * dq); //double critic damping
-  tau_joint_limit.setZero();                      
-  if (q(0)>2.85)     { tau_joint_limit(0)=-10; } 
+  tau_joint_limit.setZero();
+  if (q(0)>2.85)     { tau_joint_limit(0)=-10; }
   if (q(0)<-2.85)    { tau_joint_limit(0)=+10; }
   if (q(1)>1.7)      { tau_joint_limit(1)=-10; }
   if (q(1)<-1.7)     { tau_joint_limit(1)=+10; }
@@ -262,14 +266,20 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
   if (q(3)<-3.0)     { tau_joint_limit(3)=+10; }
   if (q(4)>2.85)     { tau_joint_limit(4)=-10; }
   if (q(4)<-2.85)    { tau_joint_limit(4)=+10; }
-  if (q(5)>3.7)      { tau_joint_limit(5)=-10; }  
+  if (q(5)>3.7)      { tau_joint_limit(5)=-10; }
   if (q(5)<-0.1)     { tau_joint_limit(5)=+10; }
   if (q(6)>2.8)      { tau_joint_limit(6)=-10; }
   if (q(6)<-2.8)     { tau_joint_limit(6)=+10; }
   // Desired torque
   tau_d << tau_task + tau_nullspace + coriolis+ tau_joint_limit;
+
   // Saturate torque rate to avoid discontinuities
   tau_d << saturateTorqueRate(tau_d, tau_J_d);
+  if (count_vibration<2000 && vibrate==true){tau_d(6)=tau_d(6)+5.0*sin(50.0/1000.0*2.0*3.14*count_vibration);
+  count_vibration=count_vibration+1;
+  //ROS_INFO_STREAM("count_vibration" << count_vibration << "tau" << tau_d);
+}
+
   for (size_t i = 0; i < 7; ++i) {
     joint_handles_[i].setCommand(tau_d(i));
   }
@@ -318,9 +328,9 @@ void CartesianImpedanceExampleController::equilibriumStiffnessCallback(
 
   cartesian_damping_target_(3,3)=2.0 * sqrt(cartesian_stiffness_target_(3,3));
   cartesian_damping_target_(4,4)=2.0 * sqrt(cartesian_stiffness_target_(4,4));
-  cartesian_damping_target_(5,5)=2.0 * sqrt(cartesian_stiffness_target_(5,5)); 
+  cartesian_damping_target_(5,5)=2.0 * sqrt(cartesian_stiffness_target_(5,5));
 
-  nullspace_stiffness_target_= std::max(std::min(stiff_[6], float(20.0)), float(0.0));
+  nullspace_stiffness_target_= std::max(std::min(stiff_[6], float(50.0)), float(0.0));
 
 
   dynamic_reconfigure::Config set_Kx;
@@ -371,7 +381,7 @@ void CartesianImpedanceExampleController::equilibriumStiffnessCallback(
   param_nullspace_double.value = nullspace_stiffness_target_;
   set_nullspace.doubles = {param_nullspace_double};
   pub_stiff_update_.publish(set_nullspace);
-  
+
 }
 
 void CartesianImpedanceExampleController::complianceParamCallback(
@@ -384,7 +394,7 @@ void CartesianImpedanceExampleController::complianceParamCallback(
   cartesian_stiffness_target_(3,3)=config.rotational_stiffness_X;
   cartesian_stiffness_target_(4,4)=config.rotational_stiffness_Y;
   cartesian_stiffness_target_(5,5)=config.rotational_stiffness_Z;
-  
+
   cartesian_damping_target_(0,0)=2.0 * sqrt(config.translational_stiffness_X);
   cartesian_damping_target_(1,1)=2.0 * sqrt(config.translational_stiffness_Y);
   cartesian_damping_target_(2,2)=2.0 * sqrt(config.translational_stiffness_Z);
@@ -403,7 +413,7 @@ void CartesianImpedanceExampleController::equilibriumPoseCallback(
   orientation_d_.coeffs() << msg->pose.orientation.x, msg->pose.orientation.y,
       msg->pose.orientation.z, msg->pose.orientation.w;
   if (last_orientation_d_.coeffs().dot(orientation_d_.coeffs()) < 0.0) {
-    orientation_d_.coeffs() << -orientation_d_.coeffs();  
+    orientation_d_.coeffs() << -orientation_d_.coeffs();
 }
 }
 void CartesianImpedanceExampleController::equilibriumConfigurationCallback( const std_msgs::Float32MultiArray::ConstPtr& joint) {
@@ -413,7 +423,12 @@ void CartesianImpedanceExampleController::equilibriumConfigurationCallback( cons
     q_d_nullspace_[i] = *it;
     i++;
   }
-  return;    
+  return;
+}
+void CartesianImpedanceExampleController::equilibriumVibrationCallback( const std_msgs::Bool::ConstPtr& vibration_msg) {
+  count_vibration = 0;
+  vibrate = true;//vibration_msg->data;
+
 }
 
 

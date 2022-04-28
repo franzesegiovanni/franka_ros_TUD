@@ -13,7 +13,7 @@
 double width =0;
 double width_old=1;
 double flag =0;
-double tolerance=0.001;
+double tolerance=0.0;
 void chatterCallback(const std_msgs::Float32::ConstPtr& msg)
 {
   width=msg->data;
@@ -39,18 +39,18 @@ int main(int argc, char **argv)
   franka_gripper::GraspActionGoal msg_grasp;
   msg_move.goal.speed = 1;
   msg_grasp.goal.speed = 1;
-  
+
   //franka_gripper::StopActionGoal msg_stop;
   while (ros::ok())
   {
    if(flag==1)
    {
-     
-     
-     if(width<(width_old+tolerance)) {
+     if(width<=(width_old+tolerance)) {
      msg_move.goal.width = width;
      pub_move.publish(msg_move);}
      else {
+       msg_move.goal.width = width;
+       pub_move.publish(msg_move);
        msg_grasp.goal.width = width;
        pub_grasp.publish(msg_grasp);}
      width_old=width;
@@ -61,7 +61,7 @@ int main(int argc, char **argv)
 
     loop_rate.sleep();
   }
-  
+
 
 
 
@@ -71,4 +71,3 @@ int main(int argc, char **argv)
 
   return 0;
 }
-
