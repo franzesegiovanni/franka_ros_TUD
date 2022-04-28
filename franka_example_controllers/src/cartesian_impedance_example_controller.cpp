@@ -306,13 +306,13 @@ void CartesianImpedanceExampleController::equilibriumStiffnessCallback(
     i++;
   }
   for (int i = 0; i < 6; i++){
-  for (int j = 0; i < 6; i++) {
+  for (int j = 0; j < 6; j++) {
   cartesian_stiffness_target_(i,j)=std::max(std::min(stiff_[i+j], float(4000.0)), float(0.0));
   }
     }
-  ROS_INFO_STREAM("Stiffness matrix is:" << cartesian_stiffness_target_);  
+  ROS_INFO_STREAM("Stiffness matrix is:" << cartesian_stiffness_target_);
   calculateDamping(q_d_);
-  calculateDamping_NullSpace(q_d_); 
+  calculateDamping_NullSpace(q_d_);
   ROS_INFO_STREAM("Damping matrix is:" << cartesian_damping_target_);
 }
 
@@ -333,9 +333,9 @@ void CartesianImpedanceExampleController::complianceParamCallback(
   nullspace_stiffness_target_(i,i) = config.nullspace_stiffness;}
   calculateDamping(q_d_);
   calculateDamping_NullSpace(q_d_);
-  ROS_INFO_STREAM("Stiffness matrix is:" << cartesian_stiffness_target_);  
+  ROS_INFO_STREAM("Stiffness matrix is:" << cartesian_stiffness_target_);
   ROS_INFO_STREAM("Damping matrix is:" << cartesian_damping_target_);
-  ROS_INFO_STREAM("Nullspace Stiffness matrix is:" << nullspace_stiffness_target_);  
+  ROS_INFO_STREAM("Nullspace Stiffness matrix is:" << nullspace_stiffness_target_);
   ROS_INFO_STREAM("Nullspace Damping matrix is:" << nullspace_damping_target_);
 }
 
@@ -378,7 +378,7 @@ void CartesianImpedanceExampleController::equilibriumPoseCallback(
   }
   calculateDamping(q_d_damp); // compute the damping before than send pose to the attractor
   calculateDamping_NullSpace(q_d_damp); // compute the damping before than send pose to the attractor
-  ROS_INFO_STREAM("Stiffness matrix is:" << cartesian_stiffness_target_);  
+  ROS_INFO_STREAM("Stiffness matrix is:" << cartesian_stiffness_target_);
   ROS_INFO_STREAM("Damping matrix is:" << cartesian_damping_target_);
   for (int i = 0; i < 7; i++)
   {
@@ -394,7 +394,7 @@ void CartesianImpedanceExampleController::equilibriumPoseCallback(
     msg->pose.orientation.z, msg->pose.orientation.w;
   if (last_orientation_d_.coeffs().dot(orientation_d_.coeffs()) < 0.0) {
     orientation_d_.coeffs() << -orientation_d_.coeffs();
-  }    
+  }
 }
 }
 
@@ -457,30 +457,30 @@ void CartesianImpedanceExampleController::calculateDamping(Eigen::Matrix<double,
   mass_goal_ = model_handle_->getMass(goal, total_inertia_, total_mass_, F_x_Ctotal_);
   Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
   Eigen::MatrixXd M_inv = mass_goal.inverse();
-  // ROS_INFO_STREAM("M_inv:" << M_inv); 
-  //Compute the Jacobian of the goal 
+  // ROS_INFO_STREAM("M_inv:" << M_inv);
+  //Compute the Jacobian of the goal
   //Compute inv(J*M_inv*J_T)
   std::array<double, 42> jacobian_array =model_handle_-> getZeroJacobian (franka::Frame::kEndEffector, goal, F_T_EE, EE_T_K);
   // convert to eigen
-  Eigen::Map<Eigen::Matrix<double, 6, 7> > J(jacobian_array.data()); 
-   ROS_INFO_STREAM("J:" << J); 
+  Eigen::Map<Eigen::Matrix<double, 6, 7> > J(jacobian_array.data());
+   ROS_INFO_STREAM("J:" << J);
   Eigen::MatrixXd M_cart_inv=(J*M_inv*J.transpose());
   Eigen::MatrixXd phi_mk = M_cart_inv.llt().matrixU();
-  //  ROS_INFO_STREAM("phi_mk:" << phi_mk); 
+  //  ROS_INFO_STREAM("phi_mk:" << phi_mk);
   //K_.setIdentity();
   K_=cartesian_stiffness_target_;
   Eigen::MatrixXd sigma_mk_hold = phi_mk * K_ * phi_mk.transpose();
   Eigen::Matrix<double, 6, 1> sigma_mk;
-  // ROS_INFO_STREAM("sigma_mk:" << sigma_mk); 
+  // ROS_INFO_STREAM("sigma_mk:" << sigma_mk);
   Eigen::MatrixXd U, V;
-  Eigen::JacobiSVD<Eigen::MatrixXd> svd;  
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd;
   svd.compute(sigma_mk_hold, Eigen::ComputeFullU | Eigen::ComputeFullV);
   U = svd.matrixU();
   V = svd.matrixV();
-  //ROS_INFO_STREAM("U:" << U); 
+  //ROS_INFO_STREAM("U:" << U);
   //ROS_INFO_STREAM("V:" << V);
   sigma_mk = svd.singularValues();
-  // ROS_INFO_STREAM("sigma_mk:" << sigma_mk); 
+  // ROS_INFO_STREAM("sigma_mk:" << sigma_mk);
 
   Eigen::MatrixXd W = phi_mk.transpose() * U;
 
@@ -498,7 +498,7 @@ void CartesianImpedanceExampleController::calculateDamping(Eigen::Matrix<double,
   omega_n(k, 0) = sqrt(sigma_mk(k, 0));
   sigma_dn(k, 0) = 2.0 * xi_n(k, 0) * omega_n(k, 0);
   }
-  
+
   Eigen::MatrixXd Sigma_d = sigma_dn.asDiagonal();
 
   Eigen::Matrix<double, 6, 6> W_T = W.transpose();
@@ -515,38 +515,38 @@ void CartesianImpedanceExampleController::calculateDamping_NullSpace(Eigen::Matr
   Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
   Eigen::Matrix<double, 7, 7> K_;
   Eigen::Matrix<double, 7, 7> D_;
-  // ROS_INFO_STREAM("M_inv:" << M_inv); 
-  //Compute the Jacobian of the goal 
+  // ROS_INFO_STREAM("M_inv:" << M_inv);
+  //Compute the Jacobian of the goal
   //Compute inv(J*M_inv*J_T)
   std::array<double, 42> jacobian_array =model_handle_-> getZeroJacobian (franka::Frame::kEndEffector, goal, F_T_EE, EE_T_K);
   // convert to eigen
-  Eigen::Map<Eigen::Matrix<double, 6, 7> > J(jacobian_array.data()); 
+  Eigen::Map<Eigen::Matrix<double, 6, 7> > J(jacobian_array.data());
   Eigen::Matrix<double, 7, 7> N;
   Eigen::MatrixXd J_transpose_pinv;
   pseudoInverse(J.transpose(), J_transpose_pinv);
   N=(Eigen::MatrixXd::Identity(7, 7) -J.transpose() * J_transpose_pinv);
-  // ROS_INFO_STREAM("J:" << J); 
-  Eigen::Matrix<double, 7, 7> M_goal_nullspace; 
+  // ROS_INFO_STREAM("J:" << J);
+  Eigen::Matrix<double, 7, 7> M_goal_nullspace;
   M_goal_nullspace = mass_goal ;
   Eigen::Matrix<double, 7, 7> Stiffness_nullspace;
   Stiffness_nullspace=nullspace_stiffness_target_;
   Eigen::MatrixXd M_inv = M_goal_nullspace.inverse();
   Eigen::MatrixXd phi_mk = M_inv.llt().matrixU();
-  //  ROS_INFO_STREAM("phi_mk:" << phi_mk); 
+  //  ROS_INFO_STREAM("phi_mk:" << phi_mk);
   K_.setIdentity();
   K_=Stiffness_nullspace;
   Eigen::MatrixXd sigma_mk_hold = phi_mk * K_ * phi_mk.transpose();
   Eigen::Matrix<double, 7, 1> sigma_mk;
-  // ROS_INFO_STREAM("sigma_mk:" << sigma_mk); 
+  // ROS_INFO_STREAM("sigma_mk:" << sigma_mk);
   Eigen::MatrixXd U, V;
-  Eigen::JacobiSVD<Eigen::MatrixXd> svd;  
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd;
   svd.compute(sigma_mk_hold, Eigen::ComputeFullU | Eigen::ComputeFullV);
   U = svd.matrixU();
   V = svd.matrixV();
-  ROS_INFO_STREAM("U:" << U); 
+  ROS_INFO_STREAM("U:" << U);
   ROS_INFO_STREAM("V:" << V);
   sigma_mk = svd.singularValues();
-  // ROS_INFO_STREAM("sigma_mk:" << sigma_mk); 
+  // ROS_INFO_STREAM("sigma_mk:" << sigma_mk);
 
   Eigen::MatrixXd W = phi_mk.transpose() * U;
 

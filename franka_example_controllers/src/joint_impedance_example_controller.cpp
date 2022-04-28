@@ -33,7 +33,7 @@ bool JointImpedanceExampleController::init(hardware_interface::RobotHW* robot_hw
   pub_stiff_update_ = node_handle.advertise<dynamic_reconfigure::Config>(
     "/dynamic_reconfigure_compliance_param_node/parameter_updates", 5);
 
-  
+
   pub_cartesian_pose_= node_handle.advertise<geometry_msgs::PoseStamped>("/cartesian_pose",1);
   pub_force_torque_= node_handle.advertise<geometry_msgs::WrenchStamped>("/force_torque_ext",1);
 
@@ -266,12 +266,12 @@ void JointImpedanceExampleController::equilibriumStiffnessCallback(
     i++;
   }
   for (int i = 0; i < 7; i++){
-  for (int j = 0; i < 7; i++) {
+  for (int j = 0; j < 7; j++) {
   joint_stiffness_target_(i,j)=std::max(std::min(stiff_[i+j], float(100.0)), float(0.0));
   }
   }
 
-  ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);  
+  ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);
   calculateDamping(q_d_); //check what damping ratio is actually taking
   ROS_INFO_STREAM("Damping matrix is:" << joint_damping_target_);
 }
@@ -287,10 +287,10 @@ void JointImpedanceExampleController::complianceJointParamCallback(
   joint_stiffness_target_(5,5) = config.joint_6;
   joint_stiffness_target_(6,6) = config.joint_7;
   damping_ratio=config.damping_ratio;
-  // for (int i = 0; i < 7; i++){ 
+  // for (int i = 0; i < 7; i++){
   // joint_damping_target_(i,i)= damping_ratio*2* sqrt(joint_stiffness_target_(i,i));}
   calculateDamping(q_d_);
-  ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);  
+  ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);
   ROS_INFO_STREAM("Damping matrix is:" << joint_damping_target_);
 }
 
@@ -357,7 +357,7 @@ void JointImpedanceExampleController::equilibriumConfigurationCallback( const se
   //   i++;
   // }
   calculateDamping(q_d_damp);
-  ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);  
+  ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);
   ROS_INFO_STREAM("Damping matrix is:" << joint_damping_target_);
 
   for(int i=0; i<7; ++i)
@@ -370,7 +370,7 @@ void JointImpedanceExampleController::equilibriumConfigurationCallback( const se
   //   q_d_[i] = *it;
   //   i++;
   // }
-  return;    
+  return;
 }
 
 void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 1>& goal_){
@@ -389,17 +389,17 @@ void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 
   Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
 
   Eigen::MatrixXd M_inv = mass_goal.inverse();
-  Eigen::MatrixXd phi_mk = M_inv.llt().matrixU(); 
+  Eigen::MatrixXd phi_mk = M_inv.llt().matrixU();
 
   //K_.setIdentity();
   K_=joint_stiffness_target_;
   Eigen::MatrixXd sigma_mk_hold = phi_mk * K_ * phi_mk.transpose();
   Eigen::Matrix<double, 7, 1> sigma_mk;
   Eigen::MatrixXd U, V;
-  Eigen::JacobiSVD<Eigen::MatrixXd> svd;  
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd;
   svd.compute(sigma_mk_hold, Eigen::ComputeFullU | Eigen::ComputeFullV);
   U = svd.matrixU();
-  V = svd.matrixV(); 
+  V = svd.matrixV();
   sigma_mk = svd.singularValues();
 
   Eigen::MatrixXd W = phi_mk.transpose() * U;
@@ -409,11 +409,11 @@ void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 
   Eigen::Matrix<double, 7, 1> sigma_dn;
 
   for(int k=0;k<7;++k){
-    xi_n(k, 0) = damping_ratio; //be care that this variable is actually not updated 
+    xi_n(k, 0) = damping_ratio; //be care that this variable is actually not updated
     omega_n(k, 0) = sqrt(sigma_mk(k, 0));
     sigma_dn(k, 0) = 2.0 * xi_n(k, 0) * omega_n(k, 0);
   }
-  
+
   Eigen::MatrixXd Sigma_d = sigma_dn.asDiagonal();
 
   Eigen::Matrix<double, 7, 7> W_T = W.transpose();
