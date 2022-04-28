@@ -13,6 +13,7 @@
 #include "std_msgs/MultiArrayLayout.h"
 #include "std_msgs/MultiArrayDimension.h"
 #include "std_msgs/Float32MultiArray.h"
+#include "std_msgs/Float32.h"
 #include "std_msgs/Bool.h"
 #include <hardware_interface/joint_command_interface.h>
 #include <hardware_interface/robot_hw.h>
@@ -67,6 +68,7 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   Eigen::Quaterniond orientation_d_;
 
   double count_vibration{10000.0};
+  double duration_vibration;
   bool vibrate= false;
   // Dynamic reconfigure
   std::unique_ptr<dynamic_reconfigure::Server<franka_example_controllers::compliance_paramConfig>>
@@ -89,7 +91,7 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   void equilibriumStiffnessCallback(const std_msgs::Float32MultiArray::ConstPtr& stiffness_);
 
   ros::Subscriber sub_vibration_;
-  void equilibriumVibrationCallback(const std_msgs::Bool::ConstPtr& vibration_);
+  void equilibriumVibrationCallback(const std_msgs::Float32::ConstPtr& vibration_);
 
   ros::Publisher pub_stiff_update_;
 

@@ -275,7 +275,7 @@ void CartesianImpedanceExampleController::update(const ros::Time& /*time*/,
 
   // Saturate torque rate to avoid discontinuities
   tau_d << saturateTorqueRate(tau_d, tau_J_d);
-  if (count_vibration<2000 && vibrate==true){tau_d(6)=tau_d(6)+5.0*sin(50.0/1000.0*2.0*3.14*count_vibration);
+  if (count_vibration<1000.0*duration_vibration){tau_d(6)=tau_d(6)+5.0*sin(100.0/1000.0*2.0*3.14*count_vibration);
   count_vibration=count_vibration+1;
   //ROS_INFO_STREAM("count_vibration" << count_vibration << "tau" << tau_d);
 }
@@ -425,9 +425,9 @@ void CartesianImpedanceExampleController::equilibriumConfigurationCallback( cons
   }
   return;
 }
-void CartesianImpedanceExampleController::equilibriumVibrationCallback( const std_msgs::Bool::ConstPtr& vibration_msg) {
+void CartesianImpedanceExampleController::equilibriumVibrationCallback( const std_msgs::Float32::ConstPtr& vibration_msg) {
   count_vibration = 0;
-  vibrate = true;//vibration_msg->data;
+  duration_vibration = vibration_msg->data;
 
 }
 
