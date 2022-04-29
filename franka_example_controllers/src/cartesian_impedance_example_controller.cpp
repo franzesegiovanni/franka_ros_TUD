@@ -27,7 +27,7 @@ bool CartesianImpedanceExampleController::init(hardware_interface::RobotHW* robo
   sub_stiffness_ = node_handle.subscribe(
     "/stiffness", 20, &CartesianImpedanceExampleController::equilibriumStiffnessCallback, this,
     ros::TransportHints().reliable().tcpNoDelay());
-  sub_stiffness_ = node_handle.subscribe(
+  sub_vibration_ = node_handle.subscribe(
       "/vibration", 20, &CartesianImpedanceExampleController::equilibriumVibrationCallback, this,
       ros::TransportHints().reliable().tcpNoDelay());
 
