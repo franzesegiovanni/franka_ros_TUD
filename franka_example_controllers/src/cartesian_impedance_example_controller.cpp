@@ -462,10 +462,13 @@ void CartesianImpedanceExampleController::calculateDamping(Eigen::Matrix<double,
 }
   Eigen::Matrix<double, 6, 6> K_;
   Eigen::Matrix<double, 6, 6> D_;
-  // mass_goal_ = model_handle_->getMass(goal, total_inertia_, total_mass_, F_x_Ctotal_);
-  // Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
-  std::array<double, 49> mass_array = model_handle_->getMass();
+  //--- mass at goal ---//
+  mass_goal_ = model_handle_->getMass(goal, total_inertia_, total_mass_, F_x_Ctotal_);
   Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
+  //--- mass at current state ---//
+  // std::array<double, 49> mass_array = model_handle_->getMass();
+  // Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
+
   Eigen::MatrixXd M_inv = mass_goal.inverse();
   // ROS_INFO_STREAM("M_inv:" << M_inv);
   //Compute the Jacobian of the goal
