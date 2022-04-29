@@ -71,6 +71,7 @@ class CartesianImpedanceExampleController : public controller_interface::MultiIn
   Eigen::Vector3d position_d_;
   Eigen::Quaterniond orientation_d_;
   Eigen::Matrix<double, 7, 1> q_d_;
+  Eigen::Matrix<double, 7, 1> q_t_;
 
   std::array<double,7> goal;//{0.0,0.0,0.0,0.0,0.0,0.0,0.0};  
   Eigen::Matrix<double, 7, 1> goal_;

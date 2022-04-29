@@ -122,7 +122,7 @@ class LfD():
 
 
     def execute_joints(self):
-        self.set_stiffness_joint(20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 2.0)
+        self.set_stiffness_joint(30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 2.0)
 
         for i in range(np.shape(self.recorded_joint)[1]): 
             goal=JointState()

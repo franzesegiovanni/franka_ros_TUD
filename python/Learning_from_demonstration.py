@@ -1,12 +1,10 @@
 #%%
 #!/usr/bin/env python
-from winreg import REG_EXPAND_SZ
 import rospy
 import math
 import numpy as np
 import time
 
-from zmq import RECONNECT_IVL_MAX
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Float32MultiArray, Float32
