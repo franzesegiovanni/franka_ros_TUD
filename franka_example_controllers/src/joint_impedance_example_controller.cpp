@@ -235,7 +235,7 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
   if (q(6)>2.8)      { tau_joint_limit(6)=-10; }
   if (q(6)<-2.8)     { tau_joint_limit(6)=+10; }
   // Desired torque
-  tau_d << tau_joint + tau_joint_limit+tau_f;
+  tau_d << tau_joint + tau_joint_limit;
   // Saturate torque rate to avoid discontinuities
   tau_d << saturateTorqueRate(tau_d, tau_J_d);
   for (size_t i = 0; i < 7; ++i) {

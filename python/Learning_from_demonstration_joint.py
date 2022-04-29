@@ -2,6 +2,7 @@
 #!/usr/bin/env python
 #from winreg import REG_EXPAND_SZ
 import rospy
+import rosbag
 import math
 import numpy as np
 import time
@@ -21,10 +22,15 @@ class LfD():
         self.curr_pos=None
         self.width=None
         self.recorded_traj = None 
+        self.recorded_experiment = None 
         self.recorded_gripper= None
         self.end = False
         self.save_joint_position = False
+        bag_name = 'test_results-' + time.strftime("%H-%M-%S") + '.bag'
+        self.bag = rosbag.Bag(bag_name, 'w')
+        self.recording_state = False
         self.gripper_sub=rospy.Subscriber("/joint_states", JointState, self.gripper_callback)
+        #self.results_sub = rospy.Subscriber("/joint_states", JointState, self.rec_results)
         self.joints=rospy.Subscriber("/joint_states", JointState, self.joint_callback)  
         self.goal_pub = rospy.Publisher('/equilibrium_pose', PoseStamped, queue_size=0)
         self.grip_pub = rospy.Publisher('/gripper_online', Float32, queue_size=0)
@@ -36,7 +42,9 @@ class LfD():
         self.width =data.position[7]+data.position[8]
     def joint_callback(self,data):
         self.curr_joint =data.position[0:7]      
-
+        if self.recording_state == True:
+            self.recorded_experiment = np.c_[self.recorded_experiment, self.curr_joint]
+            self.recorded_time = np.c_[self.recorded_time, time.time()]
     def _on_press(self, key):
         # This function runs on the background and checks if a keyboard key was pressed
         if key == KeyCode.from_char('e'):
@@ -67,6 +75,7 @@ class LfD():
                 print('Adding joint position')
                 time.sleep(0.5) 
                 self.save_joint_position=False   
+        np.savez('recorded_points', recorded_joint = self.recorded_joint, recorded_gripper = self.recorded_gripper)
         print('End of the demonstration')        
   
 
@@ -89,8 +98,8 @@ class LfD():
             self.recorded_joint = np.c_[self.recorded_joint, self.curr_joint]
             self.r.sleep()
 
+        np.savez('recorded_traj', self.recorded_joint, self.recorded_gripper)
         self.end=False    
-
 
     def go_to_start_joint(self):
         start = self.curr_joint
@@ -132,10 +141,16 @@ class LfD():
             grip_command.data = self.recorded_gripper[0,i]
             self.grip_pub.publish(grip_command) 
             self.r.sleep()
+    def load_file(self):
+        goal_points = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/recorded_points.npz')
+        self.recorded_joint = goal_points['recorded_joint']
+        self.recorded_gripper = goal_points['recorded_gripper']
 
     def execute_joints_points(self):
-        self.set_stiffness_joint(10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 2.0)
-
+        self.recording_state = True
+        self.set_stiffness_joint(20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 2.0)
+        self.recorded_experiment= self.curr_joint
+        self.recorded_time=time.time()
         for i in range(np.shape(self.recorded_joint)[1]): 
             goal=JointState()
             goal.position=self.recorded_joint[:,i]
@@ -144,14 +159,18 @@ class LfD():
             grip_command = Float32()
             grip_command.data = self.recorded_gripper[0,i]
             self.grip_pub.publish(grip_command) 
-            time.sleep(5)  
+            time.sleep(5) 
+
+        self.recording_state = False
+        np.savez('recorded_experiments', recorded_joints=self.recorded_experiment, time_stamp=self.recorded_time) 
 
 #%%    
 LfD=LfD()
 
 #%%
 LfD.joint_rec_point() 
-
+#%%
+LfD.load_file()
 #%%
 LfD.go_to_start_joint()
 
