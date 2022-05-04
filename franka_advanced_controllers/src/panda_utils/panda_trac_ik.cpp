@@ -4,7 +4,7 @@
 
 #include "panda_utils/panda_trac_ik.h"
 
-namespace franka_example_controllers
+namespace franka_advanced_controllers
 {
 
 PandaTracIK::PandaTracIK() : _urdf_param_string("/robot_description"), _secs_timeout(0.1),
