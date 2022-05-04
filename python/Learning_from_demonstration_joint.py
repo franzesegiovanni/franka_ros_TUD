@@ -20,14 +20,17 @@ class LfD():
         rospy.init_node('LfD', anonymous=True)
         self.r=rospy.Rate(10)
         self.curr_pos=None
+        self.curr_joint = None
         self.width=None
         self.recorded_traj = None 
         self.recorded_experiment = None 
         self.recorded_gripper= None
+        self.recorded_joint = None 
+        self.step_change = 0.1
         self.end = False
         self.save_joint_position = False
-        bag_name = 'test_results-' + time.strftime("%H-%M-%S") + '.bag'
-        self.bag = rosbag.Bag(bag_name, 'w')
+        # bag_name = 'test_results-' + time.strftime("%H-%M-%S") + '.bag'
+        # self.bag = rosbag.Bag(bag_name, 'w')
         self.recording_state = False
         self.gripper_sub=rospy.Subscriber("/joint_states", JointState, self.gripper_callback)
         #self.results_sub = rospy.Subscriber("/joint_states", JointState, self.rec_results)
@@ -129,9 +132,37 @@ class LfD():
             self.joint_pub.publish(goal)
             self.r.sleep()  
 
+    def track_start_joint(self):
+        start = self.curr_joint
+        goal_=np.array([self.recorded_joint[0][0], self.recorded_joint[1][0], self.recorded_joint[2][0], self.recorded_joint[3][0], self.recorded_joint[4][0], self.recorded_joint[5][0], self.recorded_joint[6][0]])
+        print("goal:", goal_)
+        squared_dist = np.sum(np.subtract(start, goal_)**2, axis=0)
+        dist = np.sqrt(squared_dist)
+        print("dist", dist)
+        interp_dist = 0.05
+        step_num = math.floor(dist / interp_dist)
+        print("num of steps", step_num)
+        q1 = np.linspace(start[0], goal_[0], step_num)
+        q2 = np.linspace(start[1], goal_[1], step_num)
+        q3 = np.linspace(start[2], goal_[2], step_num)
+        q4 = np.linspace(start[3], goal_[3], step_num)
+        q5 = np.linspace(start[4], goal_[4], step_num)
+        q6 = np.linspace(start[5], goal_[5], step_num)
+        q7 = np.linspace(start[6], goal_[6], step_num)
+        goal=JointState()
+        goal.position=[q1[0],q2[0],q3[0],q4[0],q5[0],q6[0],q7[0]]
+        self.joint_pub.publish(goal)
+        self.set_stiffness_joint(100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 5.0)
+
+        for i in range(step_num):
+            goal=JointState()
+            goal.position=[q1[i],q2[i],q3[i],q4[i],q5[i],q6[i],q7[i]]
+            self.joint_pub.publish(goal)
+            self.r.sleep()  
+
 
     def execute_joints(self):
-        self.set_stiffness_joint(30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 2.0)
+        self.set_stiffness_joint(30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 8.0)
 
         for i in range(np.shape(self.recorded_joint)[1]): 
             goal=JointState()
@@ -141,14 +172,32 @@ class LfD():
             grip_command.data = self.recorded_gripper[0,i]
             self.grip_pub.publish(grip_command) 
             self.r.sleep()
+
     def load_file(self):
         goal_points = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/recorded_points.npz')
         self.recorded_joint = goal_points['recorded_joint']
         self.recorded_gripper = goal_points['recorded_gripper']
 
+    def execute_step_change(self):
+        self.recording_state = True
+        self.set_stiffness_joint(100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 2.0)
+        self.recorded_experiment= self.curr_joint
+        self.recorded_time=time.time()
+        goal = JointState()
+        goal.position = self.recorded_joint
+        goal.position=np.array([self.recorded_joint[0][0], self.recorded_joint[1][0], self.recorded_joint[2][0], self.recorded_joint[3][0], self.recorded_joint[4][0], self.recorded_joint[5][0], self.recorded_joint[6][0]])
+        print('goal position before step change: ', goal.position)
+        goal.position= goal.position + self.step_change
+        print('goal position after step change: ', goal.position)
+        self.joint_pub.publish(goal)
+        time.sleep(4.0)
+        #for i in range(np.shape(self.recorded_joint)[1]): 
+        self.recording_state = False
+        np.savez('recorded_experiments', recorded_joints=self.recorded_experiment, time_stamp=self.recorded_time) 
+
     def execute_joints_points(self):
         self.recording_state = True
-        self.set_stiffness_joint(20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 2.0)
+        self.set_stiffness_joint(100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 2.0)
         self.recorded_experiment= self.curr_joint
         self.recorded_time=time.time()
         for i in range(np.shape(self.recorded_joint)[1]): 
@@ -173,6 +222,10 @@ LfD.joint_rec_point()
 LfD.load_file()
 #%%
 LfD.go_to_start_joint()
+#%%
+LfD.track_start_joint()
+#%% 
+LfD.execute_step_change()
 
 #%%
 LfD.execute_joints_points()

@@ -116,6 +116,8 @@ bool JointImpedanceExampleController::init(hardware_interface::RobotHW* robot_hw
 
   stiff_.setZero();
 
+  //joint_damping_target_.setZero();
+
   return true;
 }
 
@@ -127,9 +129,24 @@ void JointImpedanceExampleController::starting(const ros::Time& /*time*/) {
   Eigen::Map<Eigen::Matrix<double, 7, 1> > dq_initial(initial_state.dq.data());
   Eigen::Map<Eigen::Matrix<double, 7, 1> > q_initial(initial_state.q.data());
   Eigen::Affine3d initial_transform(Eigen::Matrix4d::Map(initial_state.O_T_EE.data()));
+  goal = initial_state.q;
   q_d_ = q_initial;
+  q_t_ = q_initial;
   force_torque_old.setZero();
   double time_old=ros::Time::now().toSec();
+  //--- mass at goal state ---//
+  mass_goal_ = model_handle_->getMass(goal, total_inertia_, total_mass_, F_x_Ctotal_);
+  Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
+
+  //--- mass at current state ---//
+  std::array<double, 49> mass_array = model_handle_->getMass();
+  Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_current(mass_array.data());
+
+  ROS_INFO_STREAM("mass matrix using goal:" << mass_goal);
+  ROS_INFO_STREAM("mass matrix at current:" << mass_current);
+  ROS_INFO_STREAM("starting damping:");
+  calculateDamping(q_d_);
+  ROS_INFO_STREAM("Damping matrix is:" << joint_damping_target_);
 }
 
 void JointImpedanceExampleController::update(const ros::Time& /*time*/,
@@ -148,6 +165,7 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
   Eigen::Map<Eigen::Matrix<double, 7, 1> > q(robot_state.q.data());
   Eigen::Map<Eigen::Matrix<double, 7, 1> > dq(robot_state.dq.data());
   double time_=ros::Time::now().toSec();
+  q_t_ = q;
 
   Eigen::Map<Eigen::Matrix<double, 7, 1> > tau_J_d(  // NOLINT (readability-identifier-naming)
       robot_state.tau_J_d.data());
@@ -159,7 +177,7 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
   Eigen::Matrix<double, 7, 1>  tau_f;
   Eigen::MatrixXd jacobian_transpose_pinv;
   Eigen::MatrixXd Null_mat;
-
+  
   pseudoInverse(jacobian.transpose(), jacobian_transpose_pinv);
   tau_f(0) =  FI_11/(1+exp(-FI_21*(dq(0)+FI_31))) - TAU_F_CONST_1;
   tau_f(1) =  FI_12/(1+exp(-FI_22*(dq(1)+FI_32))) - TAU_F_CONST_2;
@@ -170,6 +188,7 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
   tau_f(6) =  FI_17/(1+exp(-FI_27*(dq(6)+FI_37))) - TAU_F_CONST_7;
 
   force_torque=force_torque-jacobian_transpose_pinv*(tau_ext-tau_f);
+  //force_torque=force_torque-jacobian_transpose_pinv*(tau_ext);
 
   // publish force, torque
   filter_step=filter_step+1;
@@ -202,6 +221,8 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
 
   Eigen::VectorXd tau_joint(7), tau_d(7), error_vect(7), tau_joint_limit(7);
 
+  // calculate Damping online 
+  //calculateDamping(q_t_);
 
   error_vect.setZero();
   // error_vect(0)=std::max(-0.1,std::min((q_d_(0) - q(0)),0.1));
@@ -218,7 +239,22 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
   error_vect(4)=(q_d_(4) - q(4));
   error_vect(5)=(q_d_(5) - q(5));
   error_vect(6)=(q_d_(6) - q(6));
-  tau_joint << joint_stiffness_target_ * (error_vect) -  joint_damping_target_ * (dq); //double critic damping
+
+  // --- franka controller design --- // 
+  for (size_t i = 0; i < 7; i++){   
+    double damping_gain;
+    double crit_damping;
+    crit_damping = 2.0 * sqrt(joint_stiffness_target_(i, i));
+    damping_gain = damping_ratio*crit_damping;
+    tau_joint[i] = joint_stiffness_target_(i, i) * error_vect[i] - 
+                   damping_gain * dq[i];
+  }
+  // --- END franka controller design --- // 
+
+  // --- damping selection controller --- // 
+  //tau_joint << joint_stiffness_target_ * (error_vect) -  joint_damping_target_ * (dq); //double critic damping
+  // --- END damping selection controller --- // 
+
   tau_joint_limit.setZero();
   if (q(0)>2.85)     { tau_joint_limit(0)=-10; }
   if (q(0)<-2.85)    { tau_joint_limit(0)=+10; }
@@ -235,9 +271,9 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
   if (q(6)>2.8)      { tau_joint_limit(6)=-10; }
   if (q(6)<-2.8)     { tau_joint_limit(6)=+10; }
   // Desired torque
-  tau_d << tau_joint + tau_joint_limit;
+  tau_d << tau_joint + tau_joint_limit + tau_f;
   // Saturate torque rate to avoid discontinuities
-  tau_d << saturateTorqueRate(tau_d, tau_J_d);
+  // tau_d << saturateTorqueRate(tau_d, tau_J_d);
   for (size_t i = 0; i < 7; ++i) {
     joint_handles_[i].setCommand(tau_d(i));
   }
@@ -385,8 +421,17 @@ void JointImpedanceExampleController::calculateDamping(Eigen::Matrix<double, 7, 
   goal[4]=goal_(4);
   goal[5]=goal_(5);
   goal[6]=goal_(6);
+
+  // ROS_INFO_STREAM("goal:" << goal_);
+  //--- mass at goal state ---//
   mass_goal_ = model_handle_->getMass(goal, total_inertia_, total_mass_, F_x_Ctotal_);
   Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_goal_.data());
+
+  //--- mass at current state ---//
+  //std::array<double, 49> mass_array = model_handle_->getMass();
+  //Eigen::Map<Eigen::Matrix<double, 7, 7> > mass_goal(mass_array.data());
+
+  //ROS_INFO_STREAM("mass:" << mass_goal);
 
   Eigen::MatrixXd M_inv = mass_goal.inverse();
   Eigen::MatrixXd phi_mk = M_inv.llt().matrixU();
