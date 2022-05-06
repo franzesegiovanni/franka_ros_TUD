@@ -189,8 +189,9 @@ class LfD():
         print('goal position before step change: ', goal.position)
         goal.position= goal.position + self.step_change
         print('goal position after step change: ', goal.position)
+        time.sleep(1.0)
         self.joint_pub.publish(goal)
-        time.sleep(4.0)
+        time.sleep(3.0)
         #for i in range(np.shape(self.recorded_joint)[1]): 
         self.recording_state = False
         np.savez('recorded_experiments', recorded_joints=self.recorded_experiment, time_stamp=self.recorded_time) 

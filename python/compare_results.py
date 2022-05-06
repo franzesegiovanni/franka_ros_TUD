@@ -9,11 +9,11 @@ test_K50_1 = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD
 test_K50_1_5 = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/K50_1_5_p2p.npz')
 test_points = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/recorded_points.npz')
 
-#test_K50_0_3 = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/p2p_sit/K50_0_3_p2p.npz')
-#test_K50_0_5 = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/p2p_sit/K50_0_5_p2p.npz')
-#test_K50_0_7 = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/p2p_sit/K50_0_7_p2p.npz')
-#test_K50_1 = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/p2p_sit/K50_1_p2p.npz')
-#test_K50_1_5 = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/p2p_sit/K50_1_5_p2p.npz')
+#test_K50_0_3 = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/p2p_panda_extended/K50_0_3_p2p.npz')
+#test_K50_0_5 = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/p2p_panda_extended/K50_0_5_p2p.npz')
+#test_K50_0_7 = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/p2p_panda_extended/K50_0_7_p2p.npz')
+#test_K50_1 = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/p2p_panda_extended/K50_1_p2p.npz')
+#test_K50_1_5 = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/p2p_panda_extended/K50_1_5_p2p.npz')
 #test_points = np.load('/home/userpanda/Desktop/CriticalDamping/src/franka_ros_TUD/python/recorded_points.npz')
 
 joints_0_3 = test_K50_0_3['recorded_joints']
