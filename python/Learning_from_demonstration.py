@@ -20,7 +20,8 @@ class LfD():
         self.width=None
         self.recorded_traj = None 
         self.recorded_gripper= None
-
+        self.save_cartesian_position=None
+        self.end = False
         self.pos_sub=rospy.Subscriber("/cartesian_pose", PoseStamped, self.ee_pos_callback)
         self.gripper_sub=rospy.Subscriber("/joint_states", JointState, self.gripper_callback)  
         self.goal_pub = rospy.Publisher('/equilibrium_pose', PoseStamped, queue_size=0)
@@ -36,7 +37,7 @@ class LfD():
             self.save_cartesian_position = True    
     def ee_pos_callback(self, data):
         self.curr_pos = np.array([data.pose.position.x, data.pose.position.y, data.pose.position.z])
-        self.curr_ori = np.array([data.pose.orietation.x, data.pose.orietation.y, data.pose.orietation.z, data.pose.orietation.w])
+        self.curr_ori = np.array([data.pose.orientation.x, data.pose.orientation.y, data.pose.orientation.z, data.pose.orientation.w])
     def gripper_callback(self, data):
         self.width =data.position[7]+data.position[8]
 
@@ -54,19 +55,20 @@ class LfD():
     def cart_rec_point(self):
         self.set_stiffness(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
-        self.recorded_cartesian = self.curr_pos
-        self.recorded_orientation = self.curr_ori
+        self.recorded_traj = self.curr_pos
+        self.recorded_ori = self.curr_ori
         self.recorded_gripper= self.width
-
-        while self.end ==False:       
+        self.end=False
+        while not(self.end):       
             if  self.save_cartesian_position==True: 
-                self.recorded_cartesian = np.c_[self.recorded_cartesian, self.curr_pos]
-                self.recorded_orientation = np.c_[self.recorded_orientation, self.curr_ori]
+                self.recorded_traj = np.c_[self.recorded_traj, self.curr_pos]
+                self.recorded_ori = np.c_[self.recorded_ori, self.curr_ori]
                 self.recorded_gripper = np.c_[self.recorded_gripper, self.width]
                 print('Adding cartesian position') 
-                time.sleep(0.5)
-                self.save_cartesian_position==False     
-            print('End of the demonstration')
+                time.sleep(0.1)
+                self.save_cartesian_position=False     
+
+        print('End of the demonstration')    
   
     def cart_rec(self):
         trigger = 0.05
@@ -75,12 +77,13 @@ class LfD():
         init_ori = self.curr_ori
         vel = 0
         vel_ori=0
+        self.set_stiffness(0.0,0.0,0.0, 0.0,0.0, 0.0, 0.0)
         while not(vel > trigger or vel_ori> trigger):
             vel     = math.sqrt((self.curr_pos[0]-init_pos[0])**2 + (self.curr_pos[1]-init_pos[1])**2 + (self.curr_pos[2]-init_pos[2])**2)
             vel_ori = math.sqrt((self.curr_ori[0]-init_ori[0])**2 + (self.curr_ori[1]-init_ori[1])**2 + (self.curr_ori[2]-init_ori[2])**2)
+        print('Start Recording demonstration')
         self.recorded_traj = self.curr_pos
         self.recorded_ori = self.curr_ori
-        self.recorded_joints = self.curr_joint
         self.recorded_gripper= self.width
         self.end=False
         while not(self.end):
@@ -91,6 +94,8 @@ class LfD():
             self.recorded_gripper = np.c_[self.recorded_gripper, self.width]
 
             self.r.sleep()
+
+        print('End of the demonstration') 
 
     # control robot to desired goal position
     def go_to_start_cart(self):
@@ -127,6 +132,7 @@ class LfD():
 
         self.goal_pub.publish(goal)
 
+        self.set_stiffness(200.0, 200.0, 200.0, 30.0, 30.0, 30.0, 0.0)
 
         goal = PoseStamped()
         for i in range(step_num):
@@ -145,6 +151,8 @@ class LfD():
             goal.pose.orientation.w = rot_w[i]
             self.goal_pub.publish(goal)
             self.r.sleep()   
+
+        self.set_stiffness(200.0, 200.0, 200.0, 30.0, 30.0, 30.0, 10.0)
 
     def execute_cart_points(self):
         self.set_stiffness(200.0, 200.0, 200.0, 30.0, 30.0, 30.0, 10.0)
@@ -173,7 +181,7 @@ class LfD():
             time.sleep(5) 
 
     def execute_cart(self):
-        self.set_stiffness(200.0, 200.0, 200.0, 30.0, 30.0, 30.0, 10.0)
+        self.set_stiffness(400.0, 400.0, 400.0, 30.0, 30.0, 30.0, 10.0)
         for i in range (self.recorded_traj.shape[1]):
             goal = PoseStamped()
 
