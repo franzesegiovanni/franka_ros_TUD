@@ -222,7 +222,7 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
   Eigen::VectorXd tau_joint(7), tau_d(7), error_vect(7), tau_joint_limit(7);
 
   // calculate Damping online 
-  calculateDamping(q_t_);
+  //calculateDamping(q_t_);
 
   error_vect.setZero();
   // error_vect(0)=std::max(-0.1,std::min((q_d_(0) - q(0)),0.1));
@@ -241,18 +241,18 @@ void JointImpedanceExampleController::update(const ros::Time& /*time*/,
   error_vect(6)=(q_d_(6) - q(6));
 
   // --- franka controller design --- // 
-  // for (size_t i = 0; i < 7; i++){   
-  //   double damping_gain;
-  //   double crit_damping;
-  //   crit_damping = 2.0 * sqrt(joint_stiffness_target_(i, i));
-  //   damping_gain = damping_ratio*crit_damping;
-  //   tau_joint[i] = joint_stiffness_target_(i, i) * error_vect[i] - 
-  //                  damping_gain * dq[i];
-  // }
+  for (size_t i = 0; i < 7; i++){   
+    double damping_gain;
+    double crit_damping;
+    crit_damping = 2.0 * sqrt(joint_stiffness_target_(i, i));
+    damping_gain = damping_ratio*crit_damping;
+    tau_joint[i] = joint_stiffness_target_(i, i) * error_vect[i] - 
+                   damping_gain * dq[i];
+  }
   // --- END franka controller design --- // 
 
   // --- damping selection controller --- // 
-  tau_joint << joint_stiffness_target_ * (error_vect) -  joint_damping_target_ * (dq); //double critic damping
+  // tau_joint << joint_stiffness_target_ * (error_vect) -  joint_damping_target_ * (dq); //double critic damping
   // --- END damping selection controller --- // 
 
   tau_joint_limit.setZero();
@@ -308,7 +308,7 @@ void JointImpedanceExampleController::equilibriumStiffnessCallback(
   }
 
   ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);
-  //calculateDamping(q_d_); //check what damping ratio is actually taking
+  calculateDamping(q_d_); //check what damping ratio is actually taking
   ROS_INFO_STREAM("Damping matrix is:" << joint_damping_target_);
 }
 
@@ -325,7 +325,7 @@ void JointImpedanceExampleController::complianceJointParamCallback(
   damping_ratio=config.damping_ratio;
   // for (int i = 0; i < 7; i++){
   // joint_damping_target_(i,i)= damping_ratio*2* sqrt(joint_stiffness_target_(i,i));}
-  //calculateDamping(q_d_);
+  calculateDamping(q_d_);
   ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);
   ROS_INFO_STREAM("Damping matrix is:" << joint_damping_target_);
 }
@@ -365,7 +365,7 @@ void JointImpedanceExampleController::equilibriumConfigurationIKCallback( const 
       q_d_damp(i) = _joints_result(i);
       //_iters[i] = 0;
   }
-  //calculateDamping(q_d_damp);
+  calculateDamping(q_d_damp);
     for (int i = 0; i < 7; i++)
   {
       //_joints_result(i) = _position_joint_handles[i].getPosition();
@@ -392,7 +392,7 @@ void JointImpedanceExampleController::equilibriumConfigurationCallback( const se
   //   q_d_damp[i] = *it;
   //   i++;
   // }
-  //calculateDamping(q_d_damp);
+  calculateDamping(q_d_damp);
   ROS_INFO_STREAM("Stiffness matrix is:" << joint_stiffness_target_);
   ROS_INFO_STREAM("Damping matrix is:" << joint_damping_target_);
 
