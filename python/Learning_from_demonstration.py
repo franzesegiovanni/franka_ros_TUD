@@ -123,7 +123,6 @@ class LfD():
             self.r.sleep()   
 
 
-    # ILoSA's main control loop
     def execute(self):
         for i in range (self.recorded_traj.shape[1]):
             goal = PoseStamped()
@@ -150,7 +149,6 @@ class LfD():
 
             self.grip_pub.publish(grip_command) 
 
-            # TODO: missing the control of the gripper
             self.r.sleep()
 
     #def start_ros(self):
