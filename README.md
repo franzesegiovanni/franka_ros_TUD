@@ -50,15 +50,15 @@ https://frankaemika.github.io/docs/installation_linux.html#building-the-ros-pack
 How to find the right IP address? 
 The IP address is composed by 4 number A.B.C.D. The first three need to be set as the same of the one set in the robot when it was installed. Please ask for this number. This number is stored in the NETWORK sction of the Desk interface of the robot. 
  The number D need to be different than the robot one because the robot and the computer do need to be in different IPs. 
-Computer IP is for example A.B.C.E. For example, the robot is 172.16.0.2 and the computer network on 172.16.0.1. The netmask is 255.255.255.0 thas is also specified in the Network session of the DESK interface. 
+Computer IP is for example A.B.C.E. For example, the robot is ```172.16.0.2``` and the computer network on ```172.16.0.1```. The netmask is ```255.255.255.0``` thas is also specified in the Network session of the DESK interface. 
 **<computer_ip>=172.16.0.1
 <robot_ip>=172.16.0.2**
 ## Add the ROS_IP information in the bash of your terminal
 1. Open the bash file
-gedit ~/.bashrc
+```gedit ~/.bashrc```
 2. Paste this two lines
-export ROS_IP=<computer_ip>
-export ROS_MASTER_URI=http://<computer_ip>:11311
+```export ROS_IP=<computer_ip>```
+```export ROS_MASTER_URI=http://<computer_ip>:11311```
 
 ## Open the desk interface to unlock and start the robot
 
@@ -78,18 +78,18 @@ rostopic echo /cartesian_pose
 ## How to connect your PC to the network and read and send commands to the controller. 
 1. Connect your PC to the network
 2. Create a new wired network and in IPv4 set Manual and put a new ip for your computer
-<pc_ip>=A.B.C.F where F is different from the <computer_ip> or the <robot_ip>. Netmask is the same  255.255.255.0. 
+<pc_ip>=A.B.C.F where F is different from the <computer_ip> or the <robot_ip>. Netmask is the same  ```255.255.255.0```. 
 Save the network. 
-3.Add this to your bash file (gedit ~/.bashrc): 
-export ROS_MASTER_URI=http://<computer_ip>:11311 
-export ROS_IP=<pc_ip>
-export ROS_HOSTNAME=<pc_ip>
+Add this to your bash file (```gedit ~/.bashrc```): 
+```export ROS_MASTER_URI=http://<computer_ip>:11311``` 
+```export ROS_IP=<pc_ip>```
+```export ROS_HOSTNAME=<pc_ip>```
 4. source ros
 source /opt/ros/<ros_version>/setup.bash
 5. Test the data_streaming with 
 rostopic list 
 
-Example: **<computer_ip>=172.16.0.10**
+Example: **<pc_ip>=172.16.0.10**
 
 ## How to control the gripper
 **rosrun franka_gripper franka_gripper_online**
