@@ -85,9 +85,9 @@ Add this to your bash file (```gedit ~/.bashrc```):
 ```export ROS_IP=<pc_ip>```
 ```export ROS_HOSTNAME=<pc_ip>```
 4. source ros
-source /opt/ros/<ros_version>/setup.bash
+source ```/opt/ros/<ros_version>/setup.bash```
 5. Test the data_streaming with 
-rostopic list 
+```rostopic list``` 
 
 Example: **<pc_ip>=172.16.0.10**
 
